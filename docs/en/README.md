@@ -22,6 +22,7 @@ Keep **Chinese and English in sync** on every substantive edit (see `.cursor/rul
 | [API.md](./API.md) | [../API.md](../API.md) |
 | [CODE_STYLE.md](./CODE_STYLE.md) | [../CODE_STYLE.md](../CODE_STYLE.md) |
 | [COMMIT_CONVENTIONS.md](./COMMIT_CONVENTIONS.md) | [../COMMIT_CONVENTIONS.md](../COMMIT_CONVENTIONS.md) |
+| [TODO.md](./TODO.md) | [../TODO.md](../TODO.md) |
 
 ## Pre-commit
 

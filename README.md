@@ -27,6 +27,7 @@
 | [docs/API.md](docs/API.md) | 对外 API 索引（占位） |
 | [docs/CODE_STYLE.md](docs/CODE_STYLE.md) | Rust 代码风格 |
 | [docs/COMMIT_CONVENTIONS.md](docs/COMMIT_CONVENTIONS.md) | Git 提交与 PR 约定 |
+| [docs/TODO.md](docs/TODO.md) | 新功能与能力扩展（TODO 列表） |
 | [CHANGELOG.md](CHANGELOG.md) | 变更记录 |
 | [docs/en/README.md](docs/en/README.md) | 英文文档索引（与 `docs/*.md` **同名**一一对照，见表中链接） |
 
