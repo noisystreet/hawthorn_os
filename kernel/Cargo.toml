@@ -3,9 +3,21 @@ name = "hawthorn_kernel"
 version = "0.0.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-description = "Hawthorn (山楂) microkernel crate (skeleton; see docs/KERNEL.md)"
+description = "Hawthorn (山楂) microkernel crate (QEMU virt minimal boot; see docs/KERNEL.md)"
 publish = false
 rust-version = "1.74"
+build = "build.rs"
 
 [lib]
 path = "src/lib.rs"
+
+[features]
+default = []
+bare-metal = []
+
+[[bin]]
+name = "hawthorn_kernel_qemu_virt"
+path = "src/bin/qemu_virt.rs"
+required-features = ["bare-metal"]
+test = false
+bench = false

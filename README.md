@@ -43,6 +43,7 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo check -p hawthorn_kernel
 cargo check -p hawthorn_kernel --target aarch64-unknown-none
+cargo build -p hawthorn_kernel --features bare-metal --target aarch64-unknown-none
 cargo build -p hawthorn_qemu_minimal --features bare-metal --target aarch64-unknown-none
 ```
 

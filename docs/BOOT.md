@@ -32,6 +32,22 @@
 
 ---
 
+## 3. QEMU `virt` 最小入口（M1，`hawthorn_kernel`）
+
+与 **启动信息块**（§1）的长期 ABI 不同，下列为 **当前仓库已实现** 的 QEMU `virt` AArch64 冒烟契约，便于与链接脚本、CI 对齐：
+
+| 项 | 约定 |
+|----|--------|
+| 链接脚本 | [`kernel/link-qemu_virt.ld`](../kernel/link-qemu_virt.ld)（与 `hawthorn_qemu_minimal` 共用） |
+| 入口符号 | **`_start`**（`ENTRY(_start)`） |
+| 初始栈 | **`SP = __stack_top`**（RAM 顶向下 16 字节对齐） |
+| Rust 入口 | **`kernel_main`**（`extern "C"`，`hawthorn_kernel::boot_qemu_virt`） |
+| 早期步骤 | BSS 清零（`__bss_start`…`__bss_end`）→ PL011 初始化 |
+| 调试串口 | **PL011**，物理基址 **`0x9000_0000`** |
+| 裸机 bin | **`hawthorn_kernel_qemu_virt`**，需 **`--features bare-metal`** + **`--target aarch64-unknown-none`** |
+
+---
+
 ## 相关文档
 
 - [架构说明](./ARCHITECTURE.md)

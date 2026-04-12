@@ -32,6 +32,12 @@ jobs:
       - name: check (aarch64 bare metal)
         run: cargo check -p hawthorn_kernel --target aarch64-unknown-none
 
+      - name: clippy (hawthorn_kernel, aarch64 bare-metal)
+        run: cargo clippy -p hawthorn_kernel --features bare-metal --target aarch64-unknown-none -- -D warnings
+
+      - name: build (hawthorn_kernel qemu virt)
+        run: cargo build -p hawthorn_kernel --features bare-metal --target aarch64-unknown-none
+
       - name: clippy (qemu minimal, aarch64 bare-metal)
         run: cargo clippy -p hawthorn_qemu_minimal --features bare-metal --target aarch64-unknown-none -- -D warnings
 

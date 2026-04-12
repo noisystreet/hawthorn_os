@@ -32,6 +32,22 @@ See [KERNEL.md §3.1](./KERNEL.md).
 
 ---
 
+## 3. QEMU `virt` minimal entry (M1, `hawthorn_kernel`)
+
+Unlike the long-term **boot info block** ABI (§1), the table below is the **currently implemented** QEMU `virt` AArch64 smoke contract:
+
+| Item | Contract |
+|------|------------|
+| Linker script | [`kernel/link-qemu_virt.ld`](../../kernel/link-qemu_virt.ld) (shared with `hawthorn_qemu_minimal`) |
+| Entry symbol | **`_start`** (`ENTRY(_start)`) |
+| Initial stack | **`SP = __stack_top`** (16-byte aligned word below RAM end) |
+| Rust entry | **`kernel_main`** (`extern "C"`, `hawthorn_kernel::boot_qemu_virt`) |
+| Early steps | Zero BSS (`__bss_start`…`__bss_end`) → PL011 init |
+| Debug UART | **PL011**, physical base **`0x9000_0000`** |
+| Bare-metal bin | **`hawthorn_kernel_qemu_virt`**, needs **`--features bare-metal`** + **`--target aarch64-unknown-none`** |
+
+---
+
 ## Related documents
 
 - [Architecture](./ARCHITECTURE.md)

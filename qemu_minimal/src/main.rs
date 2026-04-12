@@ -27,7 +27,7 @@ global_asm!(
     ".section .text.boot, \"ax\"",
     ".global _start",
     "_start:",
-    /* Stack at top of RAM (see link-qemu_virt.ld). */
+    /* Stack at top of RAM (see `kernel/link-qemu_virt.ld`). */
     "ldr x30, =__stack_top",
     "mov sp, x30",
     "bl rust_entry",
