@@ -13,16 +13,26 @@
 
   ```bash
   cargo fmt --all -- --check
-  cargo clippy -p hawthorn_kernel --all-targets --all-features
+  cargo clippy --workspace --all-targets -- -D warnings
   cargo check -p hawthorn_kernel
   cargo check -p hawthorn_kernel --target aarch64-unknown-none
+  cargo build -p hawthorn_qemu_minimal --features bare-metal --target aarch64-unknown-none
   ```
 
 - 交叉目标由 `rustup` 根据 `rust-toolchain.toml` 安装；若缺失可执行：`rustup target add aarch64-unknown-none`。
 
 ### 1.1 Git pre-commit（可选）
 
-仓库根目录 [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) 定义 **`cargo fmt --check`**、**`cargo clippy -D warnings`**（与 CI 一致），以及 **`commit-msg`** 钩子（**`scripts/commit_msg_bilingual.py`**：英文 Conventional **第 1 行** + **第 2 行**中文、不同行）。安装 [pre-commit](https://pre-commit.com/) 后执行 `pre-commit install` 即可。详见 [CONTRIBUTING.md](../CONTRIBUTING.md) 与 [COMMIT_CONVENTIONS.md](./COMMIT_CONVENTIONS.md) §1.0。
+仓库根目录 [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) 定义 **`cargo fmt --check`**、**`cargo clippy --workspace -D warnings`**（与 CI 一致），以及 **`commit-msg`** 钩子（**`scripts/commit_msg_bilingual.py`**：英文 Conventional **第 1 行** + **第 2 行**中文、不同行）。安装 [pre-commit](https://pre-commit.com/) 后执行 `pre-commit install` 即可。详见 [CONTRIBUTING.md](../CONTRIBUTING.md) 与 [COMMIT_CONVENTIONS.md](./COMMIT_CONVENTIONS.md) §1.0。
+
+### 1.2 QEMU `virt` 最小镜像（可选）
+
+仓库提供 **`hawthorn_qemu_minimal`**（目录 [`qemu_minimal/`](../qemu_minimal/)）：在 **`--features bare-metal`** 且 **`--target aarch64-unknown-none`** 下链接出裸 AArch64 ELF，向 **PL011 UART**（物理基址 **`0x9000_0000`**，与 QEMU `virt` DTB 中 `pl011@9000000` 一致）打印一行后停机；未启用该 feature 时仅构建空库，便于在主机上 **`cargo clippy --workspace`**。
+
+- **构建：** `cargo build -p hawthorn_qemu_minimal --features bare-metal --target aarch64-unknown-none`（发布模式可加 `PROFILE=release` 配合下方脚本）。
+- **运行：** 安装 **`qemu-system-aarch64`** 后执行 [`scripts/run_qemu_minimal.sh`](../scripts/run_qemu_minimal.sh)；脚本会在启动前向 **stderr** 打印进度（避免误以为「无反应」）。等价命令行使用 **`-machine virt -cpu cortex-a76 -nographic -kernel <ELF>`**（`-nographic` 将串口接到 stdio，**勿**再叠加 **`-serial stdio`**，否则易争用 stdio）。
+- **一键自检（推荐）：** [`scripts/verify_qemu_minimal.sh`](../scripts/verify_qemu_minimal.sh) 会跑 **fmt / workspace clippy / 裸机 clippy+build / 短时 QEMU**，并检查是否出现 **`[hawthorn]`** 进度行；若串口行在捕获输出里不可见，脚本仍会报告「Rust 与脚本阶段已通过」（部分 CI/管道环境下 PL011 行不可见属常见现象）。
+- **注意：** 在 **非交互式** 管道里跑 QEMU 时，可能看不到访客串口行；请在 **真实终端** 里执行脚本。若仍无输出，可改用 **`-serial pty`**，按 QEMU 提示在另一终端 **`cat /dev/pts/N`** 读取串口。
 
 ---
 

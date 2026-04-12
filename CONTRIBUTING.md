@@ -11,7 +11,7 @@
 
 本仓库使用 [pre-commit](https://pre-commit.com/)：
 
-- **`pre-commit` 阶段**（每次 `git commit` 前）：**`cargo fmt --check`**、**`cargo clippy -D warnings`**（与 CI 一致）。  
+- **`pre-commit` 阶段**（每次 `git commit` 前）：**`cargo fmt --check`**、**`cargo clippy --workspace -D warnings`**（与 CI 一致）。  
 - **`commit-msg` 阶段**：**`scripts/commit_msg_bilingual.py`** 要求提交说明前两条非注释行为 **英文 Conventional Commits 标题行** + **单独一行中文**（语义对应、不得与英文同行），详见 [提交规范](docs/COMMIT_CONVENTIONS.md) §1.0。
 
 ```bash

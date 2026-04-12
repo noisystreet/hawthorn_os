@@ -1,1 +1,1 @@
-# 裸机 AArch64 的链接脚本、运行器（QEMU/JTAG）、rustflags 等见 docs/PORTING.md。
+# 裸机 AArch64：`hawthorn_qemu_minimal` 的链接脚本由 qemu_minimal/build.rs 注入；其余见 docs/PORTING.md。

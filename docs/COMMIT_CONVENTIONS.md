@@ -8,7 +8,7 @@
 
 安装 [pre-commit](https://pre-commit.com/) 并执行 **`pre-commit install`** 后：
 
-- **`pre-commit` 阶段**：`cargo fmt --check`、`cargo clippy -D warnings`（与 CI 一致）。  
+- **`pre-commit` 阶段**：`cargo fmt --check`、`cargo clippy --workspace -D warnings`（与 CI 一致）。  
 - **`commit-msg` 阶段**：运行 **`scripts/commit_msg_bilingual.py`**，校验**双语标题**（见下文 **§1.0**）。
 
 可选：`git config commit.template .gitmessage`，在编辑器中显示格式提示（`#` 行不会进入最终提交）。

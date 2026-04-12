@@ -34,6 +34,7 @@ Drivers, network stacks, and file systems are intended to run as **user services
 ```
 hawthorn/   # suggested clone name; crate is hawthorn regardless
 ├── kernel/              # hawthorn_kernel — microkernel (only on-disk code today)
+├── qemu_minimal/        # hawthorn_qemu_minimal — QEMU virt PL011 smoke binary
 ├── docs/, docs/en/      # Chinese + English mirrors
 ├── .cursor/rules/       # Cursor agent rules (hawthorn-*.mdc)
 ├── .github/workflows/   # CI: fmt, clippy, cargo check (host + aarch64-unknown-none)
@@ -52,9 +53,10 @@ Planned (not necessarily present yet): `servers/`, `hal/`, `bsp/orangepi5-rk3588
 
 ```bash
 cargo fmt --all -- --check
-cargo clippy -p hawthorn_kernel --all-targets --all-features -- -D warnings
+cargo clippy --workspace --all-targets -- -D warnings
 cargo check -p hawthorn_kernel
 cargo check -p hawthorn_kernel --target aarch64-unknown-none
+cargo build -p hawthorn_qemu_minimal --features bare-metal --target aarch64-unknown-none
 ```
 
 Optional: `pre-commit install` then each `git commit` runs **fmt/clippy** (`pre-commit` stage) and validates the **commit message first line** (**`commit-msg`**, Conventional Commits — see `docs/COMMIT_CONVENTIONS.md`). Optional: `git config commit.template .gitmessage` (see `CONTRIBUTING.md`).

@@ -10,7 +10,7 @@ Rust style, static checks, and review focus for **Hawthorn (山楂)** — kernel
 
 - **Rust:** [rust-toolchain.toml](../../rust-toolchain.toml) is authoritative (**stable**, `aarch64-unknown-none`, `rustfmt`, `clippy`).  
 - **Format:** run `cargo fmt` before commit. **pre-commit** (root `.pre-commit-config.yaml`, [CONTRIBUTING.md](../../CONTRIBUTING.md)) runs `cargo fmt --check` on commit. Do not fight `rustfmt`; use `#[rustfmt::skip]` only in tiny scopes with a reason.  
-- **Lint:** `cargo clippy --all-targets --all-features` (or CI equivalent). New code should not add **warn**-level issues; `#[allow(...)]` needs a short comment.  
+- **Lint:** `cargo clippy --workspace --all-targets` (or CI equivalent; **avoid** `--all-features` on this workspace—it enables `hawthorn_qemu_minimal`'s `bare-metal` and tries to build the bare-metal `bin` on the host). New code should not add **warn**-level issues; `#[allow(...)]` needs a short comment.  
 - **Build:** `cargo build` / `cargo check` must pass; bare-metal target: [PORTING.md](./PORTING.md), [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
 
 ---

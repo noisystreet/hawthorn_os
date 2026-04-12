@@ -7,7 +7,7 @@
 
 **首发硬件**：[香橙派 5](https://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/details/Orange-Pi-5.html)（**RK3588**，AArch64）。
 
-当前仓库包含 **设计文档**、**最小 Rust 工作区**（`kernel` 占位 crate）与 **CI**；完整内核与 BSP 仍在实现中。
+当前仓库包含 **设计文档**、**最小 Rust 工作区**（`kernel` 占位 crate、**`qemu_minimal/`** 下 QEMU `virt` 可启动的最小 ELF）与 **CI**；完整内核与 BSP 仍在实现中。
 
 ---
 
@@ -38,16 +38,17 @@
 
 ```bash
 cargo fmt --all -- --check
-cargo clippy -p hawthorn_kernel --all-targets --all-features
+cargo clippy --workspace --all-targets -- -D warnings
 cargo check -p hawthorn_kernel
 cargo check -p hawthorn_kernel --target aarch64-unknown-none
+cargo build -p hawthorn_qemu_minimal --features bare-metal --target aarch64-unknown-none
 ```
 
 `rust-toolchain.toml` 已指定 **stable** 与目标 **`aarch64-unknown-none`**。
 
 **提交前检查（推荐）**：安装 [pre-commit](https://pre-commit.com/) 后在仓库根执行 `pre-commit install`，与 CI 相同的 **格式化检查** 与 **Clippy** 会在 `git commit` 时运行。说明见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
-镜像烧录、链接脚本与 QEMU 等见 [docs/PORTING.md](docs/PORTING.md)。
+镜像烧录、链接脚本与 **QEMU 最小镜像**（[`scripts/run_qemu_minimal.sh`](scripts/run_qemu_minimal.sh)）见 [docs/PORTING.md](docs/PORTING.md)。
 
 ---
 

@@ -1,0 +1,24 @@
+[package]
+name = "hawthorn_qemu_minimal"
+version = "0.0.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Minimal AArch64 bare-metal image for QEMU virt (PL011 UART)"
+publish = false
+rust-version = "1.74"
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+default = []
+bare-metal = []
+
+[[bin]]
+name = "hawthorn_qemu_minimal"
+path = "src/main.rs"
+required-features = ["bare-metal"]
+test = false
+bench = false
+
+[dependencies]

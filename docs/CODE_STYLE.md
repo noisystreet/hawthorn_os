@@ -10,7 +10,7 @@
 
 - **Rust 版本**：以仓库根目录 [rust-toolchain.toml](../rust-toolchain.toml) 为准（当前为 **stable**，并包含 `aarch64-unknown-none` 目标与 `rustfmt`、`clippy`）。
 - **格式化**：提交前运行 `cargo fmt`。推荐安装 **pre-commit**（见根目录 `.pre-commit-config.yaml` 与 [CONTRIBUTING.md](../CONTRIBUTING.md)），在 `git commit` 时自动执行 `cargo fmt --check`。不手工与 `rustfmt` 对抗；若需例外，在极小范围内使用 `#[rustfmt::skip]` 并写明原因。
-- **静态分析**：提交前运行 `cargo clippy --all-targets --all-features`（或 CI 等价命令）。新增代码不应引入 **warn** 级别告警；若确需允许某条 lint，使用 **模块级或行级** `#![allow(...)]` / `#[allow(...)]` 并附简短注释说明理由。
+- **静态分析**：提交前运行 `cargo clippy --workspace --all-targets`（或 CI 等价命令；**勿**对当前工作区使用 `--all-features`，否则会打开 `hawthorn_qemu_minimal` 的 `bare-metal` 并在主机上误编裸机 bin）。新增代码不应引入 **warn** 级别告警；若确需允许某条 lint，使用 **模块级或行级** `#![allow(...)]` / `#[allow(...)]` 并附简短注释说明理由。
 - **构建**：`cargo build` / `cargo check` 应能通过；首发裸机目标见 [PORTING.md](./PORTING.md) 与根目录 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)。
 
 ---
