@@ -23,6 +23,7 @@ Keep **Chinese and English in sync** on every substantive edit (see `.cursor/rul
 | [CODE_STYLE.md](./CODE_STYLE.md) | [../CODE_STYLE.md](../CODE_STYLE.md) |
 | [COMMIT_CONVENTIONS.md](./COMMIT_CONVENTIONS.md) | [../COMMIT_CONVENTIONS.md](../COMMIT_CONVENTIONS.md) |
 | [TODO.md](./TODO.md) | [../TODO.md](../TODO.md) |
+| [PR_ISSUE_PLAN.md](./PR_ISSUE_PLAN.md) | [../PR_ISSUE_PLAN.md](../PR_ISSUE_PLAN.md) |
 
 ## Pre-commit
 

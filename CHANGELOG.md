@@ -7,6 +7,7 @@
 ### Added
 
 - 文档：**新功能与能力扩展 TODO**（[docs/TODO.md](docs/TODO.md) 与 [docs/en/TODO.md](docs/en/TODO.md)）；索引见 [docs/README.md](docs/README.md)、根 [README.md](README.md)
+- 文档：**PR / Issue 编排**（[docs/PR_ISSUE_PLAN.md](docs/PR_ISSUE_PLAN.md) 与 [docs/en/PR_ISSUE_PLAN.md](docs/en/PR_ISSUE_PLAN.md)）；GitHub 里程碑 issue **#1–#5**；`AGENTS.md` 与 `docs/TODO.md` 说明处挂链
 - 文档：`ARCHITECTURE`、`KERNEL`、`CODE_STYLE`、`COMMIT_CONVENTIONS`、`PORTING`、`BOOT`、`SYSCALL_ABI`、`PLATFORMS`、`GLOSSARY`、`API`（占位）
 - 根工作区：`Cargo.toml`、`rust-toolchain.toml`、`.cargo/config.toml`、`kernel` 骨架 crate
 - CI：`.github/workflows/ci.yml`（`fmt`、**workspace** `clippy`、`check` host + `aarch64-unknown-none`、**`hawthorn_qemu_minimal` AArch64 `clippy`/`build`（`--features bare-metal`）**）

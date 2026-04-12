@@ -18,6 +18,7 @@
 | [CODE_STYLE.md](./CODE_STYLE.md) | [en/CODE_STYLE.md](./en/CODE_STYLE.md) |
 | [COMMIT_CONVENTIONS.md](./COMMIT_CONVENTIONS.md) | [en/COMMIT_CONVENTIONS.md](./en/COMMIT_CONVENTIONS.md) |
 | [TODO.md](./TODO.md) | [en/TODO.md](./en/TODO.md) |
+| [PR_ISSUE_PLAN.md](./PR_ISSUE_PLAN.md) | [en/PR_ISSUE_PLAN.md](./en/PR_ISSUE_PLAN.md) |
 
 双语同步规则见 [`.cursor/rules/hawthorn-docs-bilingual.mdc`](../.cursor/rules/hawthorn-docs-bilingual.mdc)。
 

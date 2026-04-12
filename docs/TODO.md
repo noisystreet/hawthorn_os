@@ -235,3 +235,4 @@
 ## 说明（非功能条目）
 
 - 本列表 **不替代** issue 优先级排序；合并大项前请在 issue 标题中带章节名（如 `[IPC]`、`[BSP]`）便于筛选。
+- **当前里程碑的 PR / issue 顺序**（含 GitHub 链接）：[PR_ISSUE_PLAN.md](./PR_ISSUE_PLAN.md)。

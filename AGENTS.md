@@ -27,6 +27,8 @@ Drivers, network stacks, and file systems are intended to run as **user services
 
 **Bilingual rule:** substantive doc changes must update **both** `docs/<name>.md` and `docs/en/<name>.md` in the same change (see `.cursor/rules/hawthorn-docs-bilingual.mdc`). Hub pages: `docs/README.md` ↔ `docs/en/README.md`.
 
+**PR / issue milestone (minimal kernel on QEMU `virt`):** see [`docs/PR_ISSUE_PLAN.md`](docs/PR_ISSUE_PLAN.md) (Chinese) and [`docs/en/PR_ISSUE_PLAN.md`](docs/en/PR_ISSUE_PLAN.md) (English) — ordered GitHub issues **#1–#4**, meta **#5**.
+
 ---
 
 ## 3. Repository layout (planned + current)

@@ -235,3 +235,4 @@ This page lists **new runtime features and capabilities** planned for the repo. 
 ## Note (non-feature)
 
 - This list **does not replace** issue prioritisation; prefix issue titles with section tags (e.g. `[IPC]`, `[BSP]`) for filtering.
+- **Current milestone PR / issue order** (with GitHub links): [PR_ISSUE_PLAN.md](./PR_ISSUE_PLAN.md).
