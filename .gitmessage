@@ -1,0 +1,10 @@
+# 第 1 行：英文 Conventional Commits（整行英文，不要夹中文）
+# <type>(<scope>): <English subject>
+#
+# 第 2 行：中文说明（单独一行，与上一行语义严格对应；不要与英文写在同一行）
+# <与上一句含义一致的中文简短说明>
+#
+# 第 3 行起：空一行后可写正文、页脚（Closes #123、BREAKING CHANGE: …）
+#
+# type: feat | fix | docs | style | refactor | perf | test | build | ci | chore | revert
+# 完整约定见 docs/COMMIT_CONVENTIONS.md

@@ -1,0 +1,13 @@
+---
+description: 项目文档 Markdown 称谓与链接
+globs: docs/**/*.md
+alwaysApply: false
+---
+
+# 文档写作约定
+
+- 项目称谓：**中文名 山楂**，英文代号 **hawthorn**；首提可写 **山楂（hawthorn）**。勿再使用旧代号 `emb_os`（历史见 `CHANGELOG.md`）。
+- 内核 crate 写作 **`hawthorn_kernel`**；仓库根目录在示意图中用 **`hawthorn/`**。
+- 链接：仓库内用 **相对路径**（如 `./KERNEL.md`）；对外 URL 写 **完整 https**。
+- 与实现状态一致：骨架、TBD、开放决策勿写成已定论；重大假设指向 `docs/ARCHITECTURE.md` §10。
+- **中英文同步**：见同目录 [`hawthorn-docs-bilingual.mdc`](./hawthorn-docs-bilingual.mdc)（`docs/en/` 镜像与 README 约束）。

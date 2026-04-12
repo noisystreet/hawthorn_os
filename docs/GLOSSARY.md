@@ -1,0 +1,19 @@
+# 术语表
+
+> **[English](./en/GLOSSARY.md)** — English mirror of this document.
+
+| 术语 | 简述 |
+|------|------|
+| **山楂** | 本操作系统项目的 **中文名称**。英文代号 **hawthorn**；主内核 crate 为 **`hawthorn_kernel`**。对外可写「山楂（hawthorn）」。 |
+| **hawthorn** | 英文项目代号；仓库目录与远程名建议与之对齐（亦可自定）。 |
+| **微内核** | 仅含调度、IPC、地址空间与映射、能力、中断递交等最小机制；驱动与协议栈在用户态服务中。 |
+| **用户态服务** | 运行在 **EL0**（或等价非内核特权级）的进程/任务，通过 **syscall** 与内核交互；代码置于 `servers/`（规划）。 |
+| **能力（Capability）** | 不可伪造的内核对对象或资源的引用；可派生、可撤销。见 [KERNEL.md](./KERNEL.md)。 |
+| **IPC** | 进程间通信；山楂（hawthorn）以 **同步消息** 等为最小集，见 KERNEL 文档。 |
+| **Endpoint / Port** | IPC 端点对象，挂载在能力上。 |
+| **TCB** | Trusted Computing Base，可信计算基；此处指需审计的最小内核代码集合。 |
+| **RK3588** | 瑞芯微 SoC，AArch64，big.LITTLE，用于首发硬件验证。 |
+| **EL0 / EL1** | ARMv8 异常级：EL0 为用户，EL1 通常为内核。 |
+| **GIC** | Generic Interrupt Controller；RK3588 上具体型号与寄存器布局以 **TRM** 为准。 |
+| **FDT / DTB** | Flattened Device Tree / 二进制设备树；是否采用及子集范围见 [ARCHITECTURE.md §10](./ARCHITECTURE.md)。 |
+| **TF-A** | Trusted Firmware-A；与 Bootloader、内核的 **EL 移交**相关。 |

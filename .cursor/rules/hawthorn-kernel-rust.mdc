@@ -1,0 +1,13 @@
+---
+description: 内核与裸机 Rust（no_std、unsafe、实时路径）
+globs: kernel/**/*.rs
+alwaysApply: false
+---
+
+# 内核 Rust 约定
+
+- `kernel` 为 **`#![no_std]`**（测试除外）；硬实时路径 **禁止隐式分配**。
+- `unsafe` 必须 **最小范围**；旁注 **`// SAFETY:`** 说明调用方不变量；封装函数在 `///` 中写清契约。
+- 库路径避免无说明的 `unwrap`/`expect`；对外 API 用 `Result` 或明确错误类型。
+- 与 **AArch64 / MMU / GIC** 相关逻辑变更时，对照 `docs/KERNEL.md` §2.3 与 `docs/PORTING.md`。
+- 不引入反向依赖：`kernel` **不得** 依赖未来的 `servers/` 或用户态 crate。

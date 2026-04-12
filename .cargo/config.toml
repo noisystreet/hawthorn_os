@@ -1,0 +1,1 @@
+# 裸机 AArch64 的链接脚本、运行器（QEMU/JTAG）、rustflags 等见 docs/PORTING.md。

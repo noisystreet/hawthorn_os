@@ -1,0 +1,91 @@
+# AGENTS.md — Hawthorn (山楂) for coding agents
+
+This file orients **AI assistants, CI bots, and contributors** using agent-style workflows. Canonical human docs live under `docs/` (Chinese) and `docs/en/` (English mirrors).
+
+---
+
+## 1. What this project is
+
+| Item | Value |
+|------|--------|
+| Chinese name | **山楂** |
+| English code name | **hawthorn** |
+| Kind | **Rust** embedded OS, **microkernel** |
+| Tier-1 hardware | [Orange Pi 5](https://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/details/Orange-Pi-5.html), SoC **RK3588**, AArch64 + MMU |
+| Kernel crate | **`hawthorn_kernel`** in `kernel/` (workspace member) |
+
+Drivers, network stacks, and file systems are intended to run as **user services** (`servers/` — planned), not inside the microkernel. See `docs/KERNEL.md` / `docs/en/KERNEL.md`.
+
+---
+
+## 2. Read first (before large edits)
+
+1. `docs/ARCHITECTURE.md` or `docs/en/ARCHITECTURE.md` — goals, layering, roadmap, open decisions.  
+2. `docs/KERNEL.md` or `docs/en/KERNEL.md` — kernel modules, IPC, capabilities, RK3588 notes.  
+3. `docs/CODE_STYLE.md` — Rust / `no_std` / `unsafe` / Clippy expectations.  
+4. `CONTRIBUTING.md` — license, pre-commit, security reporting.
+
+**Bilingual rule:** substantive doc changes must update **both** `docs/<name>.md` and `docs/en/<name>.md` in the same change (see `.cursor/rules/hawthorn-docs-bilingual.mdc`). Hub pages: `docs/README.md` ↔ `docs/en/README.md`.
+
+---
+
+## 3. Repository layout (planned + current)
+
+```
+hawthorn/   # suggested clone name; crate is hawthorn regardless
+├── kernel/              # hawthorn_kernel — microkernel (only on-disk code today)
+├── docs/, docs/en/      # Chinese + English mirrors
+├── .cursor/rules/       # Cursor agent rules (hawthorn-*.mdc)
+├── .github/workflows/   # CI: fmt, clippy, cargo check (host + aarch64-unknown-none)
+├── .pre-commit-config.yaml
+├── Cargo.toml           # workspace
+└── rust-toolchain.toml  # stable + aarch64-unknown-none + rustfmt + clippy
+```
+
+Planned (not necessarily present yet): `servers/`, `hal/`, `bsp/orangepi5-rk3588/`, `syscall_abi/`, `middleware/`, `examples/`, `tools/`.
+
+**Hard rule:** `kernel` **must not** depend on `servers` or user crates; user ↔ kernel boundary is **syscall + stable ABI** only.
+
+---
+
+## 4. Verify locally (match CI)
+
+```bash
+cargo fmt --all -- --check
+cargo clippy -p hawthorn_kernel --all-targets --all-features -- -D warnings
+cargo check -p hawthorn_kernel
+cargo check -p hawthorn_kernel --target aarch64-unknown-none
+```
+
+Optional: `pre-commit install` then each `git commit` runs **fmt/clippy** (`pre-commit` stage) and validates the **commit message first line** (**`commit-msg`**, Conventional Commits — see `docs/COMMIT_CONVENTIONS.md`). Optional: `git config commit.template .gitmessage` (see `CONTRIBUTING.md`).
+
+---
+
+## 5. Cursor-specific rules
+
+Project-specific agent instructions: **`.cursor/rules/`** (`hawthorn-core.mdc`, `hawthorn-kernel-rust.mdc`, `hawthorn-docs.mdc`, `hawthorn-docs-bilingual.mdc`, `hawthorn-workspace.mdc`). Prefer them over generic guesses when they apply.
+
+---
+
+## 6. Communication & comments
+
+- User-facing explanations for this repo are often **Simplified Chinese**; **public Rust `///` API docs** should stay **English** where possible (`docs/CODE_STYLE.md`).  
+- Commit messages: follow `docs/COMMIT_CONVENTIONS.md` (Conventional Commits).
+
+---
+
+## 7. License
+
+Dual **MIT OR Apache-2.0** — see `LICENSE-MIT`, `LICENSE-APACHE`. New source: `SPDX-License-Identifier: MIT OR Apache-2.0`.
+
+---
+
+## 8. GitHub workflows
+
+- **Issue templates:** `.github/ISSUE_TEMPLATE/` — bug report, feature/design, documentation (Chinese).  
+- **PR template:** `.github/pull_request_template.md` — checklist aligned with CI and bilingual docs.  
+- **Commit messages:** first non-empty line = **English** Conventional Commits; second = **Chinese** same meaning, **separate line** (enforced by `scripts/commit_msg_bilingual.py` via pre-commit `commit-msg`).
+
+## 9. Security
+
+Do not post exploitable security issues in public issues; see `SECURITY.md`.

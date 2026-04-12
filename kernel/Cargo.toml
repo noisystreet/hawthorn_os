@@ -1,0 +1,11 @@
+[package]
+name = "hawthorn_kernel"
+version = "0.0.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Hawthorn (山楂) microkernel crate (skeleton; see docs/KERNEL.md)"
+publish = false
+rust-version = "1.74"
+
+[lib]
+path = "src/lib.rs"

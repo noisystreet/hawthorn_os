@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: aarch64-unknown-none
+
+      - name: fmt
+        run: cargo fmt --all -- --check
+
+      - name: clippy (host)
+        run: cargo clippy -p hawthorn_kernel --all-targets --all-features -- -D warnings
+
+      - name: check (host)
+        run: cargo check -p hawthorn_kernel
+
+      - name: check (aarch64 bare metal)
+        run: cargo check -p hawthorn_kernel --target aarch64-unknown-none

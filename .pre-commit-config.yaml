@@ -1,0 +1,40 @@
+# https://pre-commit.com
+# pre-commit：fmt / clippy（与 CI 一致）
+# commit-msg：Conventional Commits 英文首行 + 单独一行中文（见 docs/COMMIT_CONVENTIONS.md）
+default_install_hook_types:
+  - pre-commit
+  - commit-msg
+
+repos:
+  - repo: local
+    hooks:
+      - id: commit-msg-bilingual
+        name: commit-msg (EN line1 + ZH line2)
+        entry: python3 scripts/commit_msg_bilingual.py
+        language: system
+        stages: [commit-msg]
+        pass_filenames: true
+
+      - id: cargo-fmt
+        name: cargo fmt (--check)
+        entry: cargo
+        args: [fmt, --all, --, --check]
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: cargo-clippy
+        name: cargo clippy (-D warnings)
+        entry: cargo
+        args:
+          - clippy
+          - -p
+          - hawthorn_kernel
+          - --all-targets
+          - --all-features
+          - --
+          - -D
+          - warnings
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]

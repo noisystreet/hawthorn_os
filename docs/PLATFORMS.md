@@ -1,0 +1,22 @@
+# 支持平台与 Tier
+
+> **[English](./en/PLATFORMS.md)** — English mirror of this document.
+
+**山楂（hawthorn）** 按硬件成熟度划分 Tier；以下为当前规划。
+
+## Tier 1（首发验证）
+
+| 板卡 | SoC | 架构 / 执行环境 | 说明 |
+|------|-----|-----------------|------|
+| [香橙派 5](https://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/details/Orange-Pi-5.html) | RK3588 | AArch64，EL1 内核 + EL0 用户态（目标） | BSP 路径：`bsp/orangepi5-rk3588/` |
+
+## Tier 2 / 3（规划中）
+
+以下表示 **产品谱系上的长期可能**，**不承诺**与 Tier 1 同步交付；命名与目录待立项后写入本表。
+
+| 方向 | 说明 |
+|------|------|
+| 其它 AArch64 SBC / SoC | 在微内核与 HAL 边界清晰后按板移植 |
+| Cortex-M / RISC-V MCU | 与当前 RK3588 **MMU + 多核 GIC** 路径差异大，属独立移植线 |
+
+与「MCU 到 MPU 谱系」相关的 **愿景表述**见 [ARCHITECTURE.md §1.1](./ARCHITECTURE.md)。
