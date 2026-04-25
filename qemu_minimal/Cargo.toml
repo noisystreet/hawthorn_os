@@ -22,3 +22,4 @@ test = false
 bench = false
 
 [dependencies]
+hawthorn_kernel = { path = "../kernel" }
