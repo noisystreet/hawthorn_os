@@ -1,3 +1,7 @@
 [workspace]
 resolver = "2"
 members = ["kernel", "qemu_minimal"]
+
+[profile.dev]
+debug-assertions = false
+overflow-checks = false

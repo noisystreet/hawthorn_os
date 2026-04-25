@@ -12,6 +12,7 @@ Rust style, static checks, and review focus for **Hawthorn (山楂)** — kernel
 - **Format:** run `cargo fmt` before commit. **pre-commit** (root `.pre-commit-config.yaml`, [CONTRIBUTING.md](../../CONTRIBUTING.md)) runs `cargo fmt --check` on commit. Do not fight `rustfmt`; use `#[rustfmt::skip]` only in tiny scopes with a reason.  
 - **Lint:** `cargo clippy --workspace --all-targets` (or CI equivalent; **avoid** `--all-features` on this workspace—it enables **`bare-metal`** on **`hawthorn_kernel`** and **`hawthorn_qemu_minimal`** and tries to build bare-metal `bin` targets on the host). New code should not add **warn**-level issues; `#[allow(...)]` needs a short comment.  
 - **Build:** `cargo build` / `cargo check` must pass; bare-metal target: [PORTING.md](./PORTING.md), [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
+- **Dev profile disables debug assertions:** the workspace root [Cargo.toml](../../Cargo.toml) sets `debug-assertions = false` and `overflow-checks = false` under `[profile.dev]`. **Rationale:** `core` library debug assertions (e.g. `ptr::write_volatile` alignment precondition checks, `core::fmt` internal pointer validation) cannot safely panic in bare-metal environments—there is no exception vector table or usable panic handler infrastructure, so any panic leads to recursive panic / stack overflow / CPU synchronous exception infinite loop (AArch64 jumps to `0x200`). This config only affects bare-metal targets; host-side `cargo test` is unaffected.
 
 ---
 
@@ -36,6 +37,7 @@ Rust style, static checks, and review focus for **Hawthorn (山楂)** — kernel
 - Keep `unsafe` **small**; wrap in functions with contracts.  
 - PRs touching `unsafe` deserve **extra review**; add tests, Miri where applicable, or HIL notes.  
 - **FFI:** isolate C boundaries; newtypes / thin wrappers; avoid raw pointers in business logic.
+- **MMIO writes must not use `core::ptr::write_volatile`:** in bare-metal environments, **all** MMIO register writes must use inline assembly (e.g. AArch64 `str`/`strb` instructions) instead of `core::ptr::write_volatile`. `write_volatile` includes runtime precondition checks (alignment, validity) in debug builds that may themselves panic, and bare-metal early boot lacks reliable panic infrastructure. Wrap in small helper functions like `mmio_write32` / `mmio_write8` with `SAFETY` comments stating the address is valid and aligned.
 
 ---
 
@@ -44,6 +46,7 @@ Rust style, static checks, and review focus for **Hawthorn (山楂)** — kernel
 - **Libraries:** return `Result` / typed errors; no bare `unwrap`/`expect` without justification; `expect("…")` states **why** it is unreachable.  
 - **Examples / tests:** `unwrap` allowed.  
 - **Real-time paths:** no **alloc**, blocking locks, or unbounded waits in ISR or hard-RT paths; document **call context** in comments.
+- **Panic handlers must not use formatted output:** bare-metal `#[panic_handler]` functions **must not** use `println!` / `format_args!` / `core::fmt` or any formatting mechanism. **Rationale:** `core::fmt` internals can trigger `core::ptr` debug assertions or integer overflow checks; a second panic inside the panic handler causes **recursive panic → stack overflow → CPU exception infinite loop**. Panic handlers may only use low-level raw writes (e.g. `pl011_write_bytes`) to emit fixed messages. Formatted panic info can be introduced only after exception vector tables and reliable stack switching are in place.
 
 ---
 

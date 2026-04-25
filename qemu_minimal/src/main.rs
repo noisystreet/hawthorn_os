@@ -24,7 +24,13 @@ global_asm!(
 );
 
 #[panic_handler]
-fn panic(_: &PanicInfo) -> ! {
+fn panic(info: &PanicInfo) -> ! {
+    // SAFETY: panic path; re-init UART to guarantee output.
+    unsafe { boot_qemu_virt::pl011_init() };
+    // SAFETY: UART initialized above. Use raw write, not println!, to avoid
+    // re-panicking inside core::fmt if debug assertions are active.
+    unsafe { boot_qemu_virt::pl011_write_bytes(b"qemu_minimal: panic\n") };
+    let _ = info;
     loop {
         core::hint::spin_loop();
     }
@@ -34,7 +40,8 @@ fn panic(_: &PanicInfo) -> ! {
 pub extern "C" fn rust_entry() -> ! {
     unsafe { boot_qemu_virt::zero_bss() };
     unsafe { boot_qemu_virt::pl011_init() };
-    unsafe { boot_qemu_virt::pl011_write_bytes(b"Hawthorn: QEMU virt minimal OK\n") };
+    // SAFETY: UART initialized above.
+    hawthorn_kernel::println!("Hawthorn: QEMU virt minimal OK");
     loop {
         core::hint::spin_loop();
     }

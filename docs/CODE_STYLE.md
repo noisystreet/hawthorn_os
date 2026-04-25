@@ -12,6 +12,7 @@
 - **格式化**：提交前运行 `cargo fmt`。推荐安装 **pre-commit**（见根目录 `.pre-commit-config.yaml` 与 [CONTRIBUTING.md](../CONTRIBUTING.md)），在 `git commit` 时自动执行 `cargo fmt --check`。不手工与 `rustfmt` 对抗；若需例外，在极小范围内使用 `#[rustfmt::skip]` 并写明原因。
 - **静态分析**：提交前运行 `cargo clippy --workspace --all-targets`（或 CI 等价命令；**勿**对当前工作区使用 `--all-features`，否则会打开 **`hawthorn_kernel`** 与 **`hawthorn_qemu_minimal`** 的 **`bare-metal`** 并在主机上误编裸机 bin）。新增代码不应引入 **warn** 级别告警；若确需允许某条 lint，使用 **模块级或行级** `#![allow(...)]` / `#[allow(...)]` 并附简短注释说明理由。
 - **构建**：`cargo build` / `cargo check` 应能通过；首发裸机目标见 [PORTING.md](./PORTING.md) 与根目录 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)。
+- **dev profile 禁用 debug assertions**：工作区根 [Cargo.toml](../Cargo.toml) 中 `[profile.dev]` 设置 `debug-assertions = false` 与 `overflow-checks = false`。**原因**：`core` 库的 debug assertions（如 `ptr::write_volatile` 的对齐前置检查、`core::fmt` 内部指针验证）在裸机环境下无法安全 panic——没有异常向量表与可用的 panic handler 基础设施，任何 panic 都会导致递归 panic / 栈溢出 / CPU 同步异常死循环（AArch64 跳到 `0x200`）。此配置仅影响裸机目标；host 端 `cargo test` 不受影响。
 
 ---
 
@@ -36,6 +37,7 @@
 - **范围**：`unsafe` 块尽量 **小**；优先封装为带契约的函数，而非在大段逻辑中散落。
 - **评审**：含 `unsafe` 的 PR 默认需要 **额外关注**；优先补充测试、 Miri（若适用）或硬件在环说明。
 - **FFI**：与 C 的边界集中在专用模块；类型与生命周期用 **新类型** 或 thin wrapper 约束，避免裸指针在业务层扩散。
+- **MMIO 写入禁止 `core::ptr::write_volatile`**：裸机环境下 **所有** MMIO 寄存器写入必须使用内联汇编（如 AArch64 的 `str`/`strb` 指令），而非 `core::ptr::write_volatile`。`write_volatile` 在 debug 构建中包含运行时前置检查（对齐、有效性），这些检查本身可能 panic，而裸机早期启动阶段尚无可靠的 panic 基础设施。推荐封装为 `mmio_write32` / `mmio_write8` 等小函数，在 `SAFETY` 注释中说明地址有效且对齐。
 
 ---
 
@@ -44,6 +46,7 @@
 - **库代码**：对外返回 `Result` / 自定义错误类型；避免无说明的 `unwrap`/`expect`；确属编程错误可用 `expect("…")` 并写清 **为何不应发生**。
 - **示例与测试**：允许 `unwrap`；`#[cfg(test)]` 中的宽松度可高于生产路径。
 - **实时路径**：硬实时或中断上下文避免 **分配**、**可能阻塞的锁**、**未bounded 的等待**；相关函数在文档中标注 **调用上下文约束**。
+- **panic handler 禁止格式化输出**：裸机 `#[panic_handler]` 中 **禁止** 使用 `println!` / `format_args!` / `core::fmt` 等格式化机制。原因：`core::fmt` 内部可能触发 `core::ptr` 的 debug assertions 或整数溢出检查，在 panic handler 中再次 panic 将导致 **递归 panic → 栈溢出 → CPU 异常死循环**。panic handler 只能使用底层原始写入（如 `pl011_write_bytes`）输出固定消息；若需格式化 panic 信息，须在异常向量表与可靠栈切换就绪后再引入。
 
 ---
 

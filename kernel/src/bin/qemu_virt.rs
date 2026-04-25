@@ -24,11 +24,13 @@ global_asm!(
 );
 
 #[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
-    // SAFETY: panic path on QEMU `virt`; UART is self-contained.
+fn panic(info: &PanicInfo) -> ! {
+    // SAFETY: panic path on QEMU `virt`; re-init UART to guarantee output.
     unsafe { pl011_init() };
-    // SAFETY: UART initialized.
+    // SAFETY: UART initialized above. Use raw write, not println!, to avoid
+    // re-panicking inside core::fmt if debug assertions are active.
     unsafe { pl011_write_bytes(b"hawthorn_kernel: panic\n") };
+    let _ = info;
     loop {
         core::hint::spin_loop();
     }
