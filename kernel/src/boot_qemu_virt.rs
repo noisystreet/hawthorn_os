@@ -129,9 +129,38 @@ pub extern "C" fn kernel_main() -> ! {
     unsafe { crate::gic::init() };
     // Initialize IRQ dispatch table (must follow GIC init).
     crate::irq::init();
+    // Initialize ARM Generic Timer (must follow IRQ init; registers PPI 30 handler).
+    crate::timer::init();
+    // Initialize cooperative task scheduler.
+    crate::task::init();
+    // Create demo tasks.
+    extern "C" fn task_a() {
+        for _ in 0..5 {
+            crate::println!("[task A] running (id={})", crate::task::current_id().0);
+            for _ in 0..1_000_000 {
+                core::hint::spin_loop();
+            }
+            crate::task::yield_now();
+        }
+    }
+    extern "C" fn task_b() {
+        for _ in 0..5 {
+            crate::println!("[task B] running (id={})", crate::task::current_id().0);
+            for _ in 0..1_000_000 {
+                core::hint::spin_loop();
+            }
+            crate::task::yield_now();
+        }
+    }
+    crate::task::create(task_a, 1);
+    crate::task::create(task_b, 1);
+    crate::println!("[task] created tasks A and B");
+    // Enable IRQ exceptions at EL1 (clear DAIF.I bit).
+    unsafe { asm!("msr daifclr, #2") };
     // SAFETY: UART initialized above.
     crate::println!("Hawthorn: hawthorn_kernel on QEMU virt OK");
     loop {
+        crate::task::yield_now();
         core::hint::spin_loop();
     }
 }

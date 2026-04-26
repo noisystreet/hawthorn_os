@@ -29,6 +29,7 @@ pub unsafe fn _print(args: fmt::Arguments) {
 macro_rules! print {
     ($($arg:tt)*) => {{
         let args = format_args!($($arg)*);
+        #[allow(unused_unsafe)]
         // SAFETY: caller guarantees UART is initialized.
         unsafe { $crate::console::_print(args) };
     }};
@@ -44,6 +45,7 @@ macro_rules! println {
     () => { $crate::print!("\n") };
     ($($arg:tt)*) => {{
         let args = format_args!($($arg)*);
+        #[allow(unused_unsafe)]
         // SAFETY: caller guarantees UART is initialized.
         unsafe { $crate::console::_print(args) };
         $crate::print!("\n");
