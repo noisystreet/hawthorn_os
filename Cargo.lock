@@ -5,6 +5,9 @@ version = 3
 [[package]]
 name = "hawthorn_kernel"
 version = "0.0.0"
+dependencies = [
+ "hawthorn_syscall_abi",
+]
 
 [[package]]
 name = "hawthorn_qemu_minimal"
@@ -12,3 +15,7 @@ version = "0.0.0"
 dependencies = [
  "hawthorn_kernel",
 ]
+
+[[package]]
+name = "hawthorn_syscall_abi"
+version = "0.0.0"

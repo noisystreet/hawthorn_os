@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["kernel", "qemu_minimal"]
+members = ["kernel", "qemu_minimal", "syscall_abi"]
 
 [profile.dev]
 debug-assertions = false

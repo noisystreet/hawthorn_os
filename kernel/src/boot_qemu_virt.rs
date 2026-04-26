@@ -133,38 +133,62 @@ pub extern "C" fn kernel_main() -> ! {
     crate::timer::init();
     // Initialize cooperative task scheduler.
     crate::task::init();
-    // Create demo tasks with different priorities and sleep behavior.
+    // Initialize syscall dispatch table.
+    crate::syscall::init();
+    // Create demo tasks: task_d tests SVC syscall path from EL1.
     extern "C" fn task_a() {
-        for i in 0..5 {
-            crate::println!("[task A] round {} (id={})", i, crate::task::current_id().0);
+        for i in 0..3 {
+            crate::println!("[task A] round {}", i);
             crate::task::sleep(500);
         }
         crate::println!("[task A] done");
     }
     extern "C" fn task_b() {
-        for i in 0..5 {
-            crate::println!("[task B] round {} (id={})", i, crate::task::current_id().0);
+        for i in 0..3 {
+            crate::println!("[task B] round {}", i);
             crate::task::sleep(300);
         }
         crate::println!("[task B] done");
     }
-    extern "C" fn task_c() {
-        for i in 0..8 {
-            crate::println!(
-                "[task C] busy round {} (id={})",
-                i,
-                crate::task::current_id().0
+    extern "C" fn task_d() {
+        crate::println!("[task D] testing syscall via SVC...");
+
+        let pid: u64;
+        unsafe {
+            asm!(
+                "mov x8, #3",
+                "svc #0",
+                "mov {}, x0",
+                out(reg) pid,
             );
-            for _ in 0..500_000 {
-                core::hint::spin_loop();
-            }
         }
-        crate::println!("[task C] done");
+        crate::println!("[task D] SYS_getpid returned {}", pid);
+
+        let msg = b"hello from SVC write!\n";
+        let len = msg.len() as u64;
+        let ptr = msg.as_ptr() as u64;
+        let ret: u64;
+        unsafe {
+            asm!(
+                "mov x8, #0",
+                "mov x0, #1",
+                "mov x1, {ptr}",
+                "mov x2, {len}",
+                "svc #0",
+                "mov {ret}, x0",
+                ptr = in(reg) ptr,
+                len = in(reg) len,
+                ret = out(reg) ret,
+            );
+        }
+        crate::println!("[task D] SYS_write returned {}", ret);
+
+        crate::println!("[task D] done");
     }
     crate::task::create(task_a, 1);
     crate::task::create(task_b, 1);
-    crate::task::create(task_c, 2);
-    crate::println!("[task] created tasks A(pri=1), B(pri=1), C(pri=2)");
+    crate::task::create(task_d, 1);
+    crate::println!("[task] created tasks A, B, D (syscall test)");
     // Enable IRQ exceptions at EL1 (clear DAIF.I bit).
     unsafe { asm!("msr daifclr, #2") };
     // SAFETY: UART initialized above.

@@ -15,6 +15,9 @@ path = "src/lib.rs"
 default = []
 bare-metal = []
 
+[dependencies]
+hawthorn_syscall_abi = { path = "../syscall_abi", features = ["kernel"] }
+
 [[bin]]
 name = "hawthorn_kernel_qemu_virt"
 path = "src/bin/qemu_virt.rs"

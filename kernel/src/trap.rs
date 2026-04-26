@@ -461,10 +461,57 @@ unsafe extern "C" fn handle_exception(
                 crate::task::schedule();
             }
         }
-        Ok(ExceptionKind::El1SyncSpx)
-        | Ok(ExceptionKind::El1SErrorSpx)
-        | Ok(ExceptionKind::El0SyncA64)
-        | Ok(ExceptionKind::El0SErrorA64) => {
+        Ok(ExceptionKind::El0SyncA64) => {
+            let esr = read_esr();
+            let ec = (esr >> 26) & 0x3F;
+            if ec == 0x15 {
+                let trap_frame = _trap_frame as *mut TrapFrame;
+                let nr = unsafe { (*trap_frame).x[8] };
+                let a0 = unsafe { (*trap_frame).x[0] };
+                let a1 = unsafe { (*trap_frame).x[1] };
+                let a2 = unsafe { (*trap_frame).x[2] };
+                let a3 = unsafe { (*trap_frame).x[3] };
+                let a4 = unsafe { (*trap_frame).x[4] };
+                let a5 = unsafe { (*trap_frame).x[5] };
+
+                let ret = crate::syscall::dispatch(nr, a0, a1, a2, a3, a4, a5);
+
+                unsafe {
+                    (*trap_frame).x[0] = ret;
+                }
+            } else {
+                dump_exception(kind.unwrap(), elr, spsr);
+                loop {
+                    core::hint::spin_loop();
+                }
+            }
+        }
+        Ok(ExceptionKind::El1SyncSpx) => {
+            let esr = read_esr();
+            let ec = (esr >> 26) & 0x3F;
+            if ec == 0x15 {
+                let trap_frame = _trap_frame as *mut TrapFrame;
+                let nr = unsafe { (*trap_frame).x[8] };
+                let a0 = unsafe { (*trap_frame).x[0] };
+                let a1 = unsafe { (*trap_frame).x[1] };
+                let a2 = unsafe { (*trap_frame).x[2] };
+                let a3 = unsafe { (*trap_frame).x[3] };
+                let a4 = unsafe { (*trap_frame).x[4] };
+                let a5 = unsafe { (*trap_frame).x[5] };
+
+                let ret = crate::syscall::dispatch(nr, a0, a1, a2, a3, a4, a5);
+
+                unsafe {
+                    (*trap_frame).x[0] = ret;
+                }
+            } else {
+                dump_exception(kind.unwrap(), elr, spsr);
+                loop {
+                    core::hint::spin_loop();
+                }
+            }
+        }
+        Ok(ExceptionKind::El1SErrorSpx) | Ok(ExceptionKind::El0SErrorA64) => {
             dump_exception(kind.unwrap(), elr, spsr);
             loop {
                 core::hint::spin_loop();

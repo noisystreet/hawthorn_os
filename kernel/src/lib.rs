@@ -14,6 +14,9 @@ pub mod gic;
 pub mod irq;
 
 #[cfg(all(target_arch = "aarch64", target_os = "none"))]
+pub mod syscall;
+
+#[cfg(all(target_arch = "aarch64", target_os = "none"))]
 pub mod task;
 
 #[cfg(all(target_arch = "aarch64", target_os = "none"))]
