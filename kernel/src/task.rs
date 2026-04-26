@@ -1,26 +1,34 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Cooperative scheduler MVP: TCB, ready queue, context switch.
+//! Preemptive scheduler with blocking primitives.
 //!
-//! Supports up to `MAX_TASKS` concurrent tasks with round-robin scheduling.
-//! Task 0 is the idle task (the `kernel_main` context). Tasks yield
-//! explicitly via [`yield_now`].
+//! Fixed-priority preemptive scheduling (FP) with round-robin within the
+//! same priority. Task 0 is the idle task (lowest priority). Supports:
+//! - **Time-slice preemption**: timer tick decrements `time_slice`; on
+//!   expiry the flag `NEED_RESCHEDULE` is set and `schedule()` is called
+//!   before returning from the IRQ handler.
+//! - **Voluntary yield**: [`yield_now`] sets current to Ready and calls
+//!   `schedule()`.
+//! - **Sleep**: [`sleep`] blocks the current task for N milliseconds; the
+//!   timer handler scans sleeping tasks and unblocks those whose
+//!   `wake_tick` has been reached.
+//! - **Manual block/unblock**: [`block`] / [`unblock`] for IPC and other
+//!   primitives.
 //!
-//! Context switch saves/restores callee-saved registers (x19–x28, x29/FP,
-//! x30/LR) and the stack pointer. New tasks start via `task_trampoline`
-//! which calls the entry function stored in x19 and falls through to
-//! `task_exit` if the entry ever returns.
+//! Context switch saves/restores callee-saved registers (x19–x30) **and**
+//! the DAIF register so that IRQ masking state is correctly preserved when
+//! switching between IRQ-preempted and voluntarily-yielded tasks.
 
+use core::arch::asm;
 use core::arch::global_asm;
 use core::mem::size_of;
 
-/// Maximum number of concurrent tasks (including idle).
 const MAX_TASKS: usize = 8;
 
-/// Per-task kernel stack size in bytes.
 const STACK_SIZE: usize = 4096;
 
-/// Task lifecycle states.
+const DEFAULT_TIME_SLICE: u64 = 10;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum TaskState {
@@ -31,15 +39,10 @@ pub enum TaskState {
     Exited = 4,
 }
 
-/// Opaque task identifier (index into the task table).
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct TaskId(pub u16);
 
-/// Callee-saved register frame for context switch.
-///
-/// Layout matches the push/pop order in `context_switch`:
-/// x19–x28, x29 (FP), x30 (LR) → 12 registers × 8 B = 96 B.
 #[repr(C)]
 struct TaskContext {
     x19: u64,
@@ -56,13 +59,14 @@ struct TaskContext {
     lr: u64,
 }
 
-/// Task control block.
 struct Task {
     sp: u64,
     state: TaskState,
-    #[allow(dead_code)]
     priority: u8,
     id: TaskId,
+    time_slice: u64,
+    daif: u64,
+    wake_tick: u64,
 }
 
 impl Task {
@@ -71,6 +75,9 @@ impl Task {
         state: TaskState::Unused,
         priority: 0,
         id: TaskId(0),
+        time_slice: 0,
+        daif: 0,
+        wake_tick: 0,
     };
 }
 
@@ -81,14 +88,8 @@ static mut CURRENT_TASK: usize = 0;
 
 static mut TASK_STACKS: [u8; MAX_TASKS * STACK_SIZE] = [0; MAX_TASKS * STACK_SIZE];
 
-// ---------------------------------------------------------------------------
-// Context switch (assembly)
-// ---------------------------------------------------------------------------
-// x0 = &old_task.sp   (where to save current SP)
-// x1 = &new_task.sp   (where to load new SP from)
-//
-// Push order: x29/x30, x27/x28, x25/x26, x23/x24, x21/x22, x19/x20
-// → matches TaskContext layout from low to high address.
+static mut NEED_RESCHEDULE: bool = false;
+
 global_asm!(
     ".global context_switch",
     ".type context_switch, @function",
@@ -113,13 +114,6 @@ global_asm!(
     "ret",
 );
 
-// ---------------------------------------------------------------------------
-// Task entry trampoline (assembly)
-// ---------------------------------------------------------------------------
-// x19 = entry point (set during task_create)
-// x30 = this trampoline (set during task_create as lr)
-//
-// Calls entry via blr x19; if it returns, falls through to task_exit.
 global_asm!(
     ".global task_trampoline",
     ".type task_trampoline, @function",
@@ -134,22 +128,18 @@ extern "C" {
     fn task_trampoline();
 }
 
-/// Safety net: called if a task entry function returns.
 #[no_mangle]
 extern "C" fn task_exit() -> ! {
     unsafe {
-        let id = CURRENT_TASK as u16;
         TASK_TABLE[CURRENT_TASK].state = TaskState::Exited;
-        crate::println!("[task] task {} exited", id);
+        NEED_RESCHEDULE = true;
+        schedule();
     }
     loop {
-        yield_now();
+        core::hint::spin_loop();
     }
 }
 
-/// Initialize the task subsystem. Must be called once before `create` / `yield_now`.
-///
-/// Sets up task 0 as the current (idle) running context.
 pub fn init() {
     unsafe {
         TASK_TABLE[0] = Task {
@@ -157,18 +147,15 @@ pub fn init() {
             state: TaskState::Running,
             priority: 255,
             id: TaskId(0),
+            time_slice: DEFAULT_TIME_SLICE,
+            daif: 0,
+            wake_tick: 0,
         };
         CURRENT_TASK = 0;
+        NEED_RESCHEDULE = false;
     }
 }
 
-/// Create a new task.
-///
-/// `entry` is the task function (should never return; if it does,
-/// `task_exit` is invoked as a safety net).
-/// `priority` is stored for future use (round-robin ignores it for now).
-///
-/// Returns `Some(TaskId)` on success, `None` if the task table is full.
 pub fn create(entry: extern "C" fn(), priority: u8) -> Option<TaskId> {
     unsafe {
         let mut idx = None;
@@ -195,42 +182,140 @@ pub fn create(entry: extern "C" fn(), priority: u8) -> Option<TaskId> {
             state: TaskState::Ready,
             priority,
             id: TaskId(idx as u16),
+            time_slice: DEFAULT_TIME_SLICE,
+            daif: 0,
+            wake_tick: 0,
         };
 
         Some(TaskId(idx as u16))
     }
 }
 
-/// Get the current task's ID.
 pub fn current_id() -> TaskId {
     unsafe { TASK_TABLE[CURRENT_TASK].id }
 }
 
-/// Cooperatively yield to the next ready task.
-///
-/// If no other task is ready, returns immediately.
-pub fn yield_now() {
+unsafe fn pick_next_task() -> usize {
+    let current = CURRENT_TASK;
+    let current_running = TASK_TABLE[current].state == TaskState::Running;
+    let current_prio = TASK_TABLE[current].priority;
+
+    let mut best_idx: Option<usize> = None;
+    let mut best_prio: u8 = 255;
+
+    for i in 0..MAX_TASKS {
+        if TASK_TABLE[i].state == TaskState::Ready && TASK_TABLE[i].priority < best_prio {
+            best_prio = TASK_TABLE[i].priority;
+            best_idx = Some(i);
+        }
+    }
+
+    match best_idx {
+        Some(_idx) if current_running && current_prio <= best_prio => current,
+        Some(idx) => idx,
+        None => 0,
+    }
+}
+
+pub fn schedule() {
     unsafe {
         let current = CURRENT_TASK;
+        let next = pick_next_task();
 
-        let mut next = None;
-        for i in 1..=MAX_TASKS {
-            let candidate = (current + i) % MAX_TASKS;
-            if TASK_TABLE[candidate].state == TaskState::Ready {
-                next = Some(candidate);
-                break;
+        if next == current && TASK_TABLE[current].state == TaskState::Running {
+            TASK_TABLE[current].time_slice = DEFAULT_TIME_SLICE;
+            return;
+        }
+
+        if TASK_TABLE[current].state == TaskState::Running {
+            TASK_TABLE[current].state = TaskState::Ready;
+        }
+
+        TASK_TABLE[next].state = TaskState::Running;
+        TASK_TABLE[next].time_slice = DEFAULT_TIME_SLICE;
+        CURRENT_TASK = next;
+
+        let daif: u64;
+        asm!("mrs {}, daif", out(reg) daif);
+        TASK_TABLE[current].daif = daif;
+
+        context_switch(&mut TASK_TABLE[current].sp, &TASK_TABLE[next].sp);
+
+        asm!("msr daif, {}", in(reg) TASK_TABLE[CURRENT_TASK].daif);
+    }
+}
+
+pub fn yield_now() {
+    unsafe {
+        if TASK_TABLE[CURRENT_TASK].state == TaskState::Running {
+            TASK_TABLE[CURRENT_TASK].state = TaskState::Ready;
+        }
+        schedule();
+    }
+}
+
+pub fn sleep(ms: u64) {
+    let tick_ms = crate::timer::tick_ms();
+    let ticks = if tick_ms > 0 { ms / tick_ms } else { 1 }.max(1);
+    unsafe {
+        let wake_tick = crate::timer::tick_count() + ticks;
+        TASK_TABLE[CURRENT_TASK].state = TaskState::Blocked;
+        TASK_TABLE[CURRENT_TASK].wake_tick = wake_tick;
+        schedule();
+    }
+}
+
+pub fn block() {
+    unsafe {
+        TASK_TABLE[CURRENT_TASK].state = TaskState::Blocked;
+        schedule();
+    }
+}
+
+pub fn unblock(id: TaskId) {
+    let idx = id.0 as usize;
+    if idx == 0 || idx >= MAX_TASKS {
+        return;
+    }
+    unsafe {
+        if TASK_TABLE[idx].state == TaskState::Blocked {
+            TASK_TABLE[idx].state = TaskState::Ready;
+            TASK_TABLE[idx].wake_tick = 0;
+            NEED_RESCHEDULE = true;
+        }
+    }
+}
+
+pub fn tick() {
+    unsafe {
+        let current = CURRENT_TASK;
+        if TASK_TABLE[current].time_slice > 0 {
+            TASK_TABLE[current].time_slice -= 1;
+            if TASK_TABLE[current].time_slice == 0 {
+                NEED_RESCHEDULE = true;
             }
         }
 
-        let next = match next {
-            Some(n) => n,
-            None => return,
-        };
+        let now = crate::timer::tick_count();
+        for i in 0..MAX_TASKS {
+            if TASK_TABLE[i].state == TaskState::Blocked
+                && TASK_TABLE[i].wake_tick > 0
+                && now >= TASK_TABLE[i].wake_tick
+            {
+                TASK_TABLE[i].state = TaskState::Ready;
+                TASK_TABLE[i].wake_tick = 0;
+                NEED_RESCHEDULE = true;
+            }
+        }
+    }
+}
 
-        TASK_TABLE[current].state = TaskState::Ready;
-        TASK_TABLE[next].state = TaskState::Running;
-        CURRENT_TASK = next;
+pub fn need_reschedule() -> bool {
+    unsafe { NEED_RESCHEDULE }
+}
 
-        context_switch(&mut TASK_TABLE[current].sp, &TASK_TABLE[next].sp);
+pub fn clear_need_reschedule() {
+    unsafe {
+        NEED_RESCHEDULE = false;
     }
 }

@@ -455,6 +455,11 @@ unsafe extern "C" fn handle_exception(
     match kind {
         Ok(ExceptionKind::El1IrqSpx) | Ok(ExceptionKind::El0IrqA64) => {
             crate::irq::dispatch();
+
+            if crate::task::need_reschedule() {
+                crate::task::clear_need_reschedule();
+                crate::task::schedule();
+            }
         }
         Ok(ExceptionKind::El1SyncSpx)
         | Ok(ExceptionKind::El1SErrorSpx)

@@ -133,34 +133,43 @@ pub extern "C" fn kernel_main() -> ! {
     crate::timer::init();
     // Initialize cooperative task scheduler.
     crate::task::init();
-    // Create demo tasks.
+    // Create demo tasks with different priorities and sleep behavior.
     extern "C" fn task_a() {
-        for _ in 0..5 {
-            crate::println!("[task A] running (id={})", crate::task::current_id().0);
-            for _ in 0..1_000_000 {
-                core::hint::spin_loop();
-            }
-            crate::task::yield_now();
+        for i in 0..5 {
+            crate::println!("[task A] round {} (id={})", i, crate::task::current_id().0);
+            crate::task::sleep(500);
         }
+        crate::println!("[task A] done");
     }
     extern "C" fn task_b() {
-        for _ in 0..5 {
-            crate::println!("[task B] running (id={})", crate::task::current_id().0);
-            for _ in 0..1_000_000 {
+        for i in 0..5 {
+            crate::println!("[task B] round {} (id={})", i, crate::task::current_id().0);
+            crate::task::sleep(300);
+        }
+        crate::println!("[task B] done");
+    }
+    extern "C" fn task_c() {
+        for i in 0..8 {
+            crate::println!(
+                "[task C] busy round {} (id={})",
+                i,
+                crate::task::current_id().0
+            );
+            for _ in 0..500_000 {
                 core::hint::spin_loop();
             }
-            crate::task::yield_now();
         }
+        crate::println!("[task C] done");
     }
     crate::task::create(task_a, 1);
     crate::task::create(task_b, 1);
-    crate::println!("[task] created tasks A and B");
+    crate::task::create(task_c, 2);
+    crate::println!("[task] created tasks A(pri=1), B(pri=1), C(pri=2)");
     // Enable IRQ exceptions at EL1 (clear DAIF.I bit).
     unsafe { asm!("msr daifclr, #2") };
     // SAFETY: UART initialized above.
     crate::println!("Hawthorn: hawthorn_kernel on QEMU virt OK");
     loop {
         crate::task::yield_now();
-        core::hint::spin_loop();
     }
 }
