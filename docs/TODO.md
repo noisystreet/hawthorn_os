@@ -6,6 +6,24 @@
 
 ---
 
+## 当前已实现模块概览（M1–M3）
+
+| 模块 | 文件 | 功能 |
+|------|------|------|
+| 引导 | `boot_qemu_virt.rs` / `bin/qemu_virt.rs` | EL2→EL1 降级 + MMU 禁用 + BSS 清零 + PL011 初始化 |
+| 控制台 | `console.rs` | `print!` / `println!` 宏，基于 PL011 UART |
+| 异常/向量 | `trap.rs` | `VBAR_EL1` 16 槽向量表，`TrapFrame`，`handle_exception` 分发 |
+| GICv3 | `gic.rs` | Distributor / Redistributor / CPU Interface 初始化，`ack()` / `eoi()` |
+| IRQ 分发 | `irq.rs` | 1020 槽 handler 表，`register()` / `dispatch()` |
+| 定时器 | `timer.rs` | ARM Generic Timer (PPI 30)，周期 tick，频率自 `CNTFRQ_EL0` |
+| 任务调度 | `task.rs` | 协作式调度 MVP：TCB / `create()` / `yield_now()` / `context_switch` 汇编 / `task_exit` |
+
+**启动序列**：`_start` (EL2→EL1) → `kernel_main`：BSS → UART → `trap::init()` → `gic::init()` → `irq::init()` → `timer::init()` → `task::init()` → 使能 IRQ → idle `yield_now()` 循环
+
+**QEMU 验证**：任务 A/B 交替执行 + Timer tick 每 10ms + 任务退出后 idle 继续运行
+
+---
+
 ## 内核基础与对象模型
 
 ### 模块边界与依赖图
@@ -28,10 +46,10 @@
 
 ### 启动、Panic 与异常向量
 
-- [ ] **引导链**：`_start`（汇编）→ 设置栈 / BSS → 跳转到 Rust `kernel_main`（或等价）；与 `link-qemu_virt.ld` / 未来板级脚本对齐。
-- [ ] **`#[panic_handler]`**：格式化或最小化 panic 信息输出路径（UART 或内存环）。
-- [ ] **向量表**：`VBAR_ELx` 设置；`sync` / `irq` / `fiq` / `SError` 入口汇编桩；默认死循环或转发到 Rust `handle_exception(reason)`。
-- [ ] **EL 选择**：文档 + 代码一致（如长期 EL1 或先 EL2 再降级）；与 [BOOT.md](./BOOT.md) 交叉引用。
+- [x] **引导链**：`_start`（汇编）→ 设置栈 / BSS → 跳转到 Rust `kernel_main`（或等价）；与 `link-qemu_virt.ld` / 未来板级脚本对齐。
+- [x] **`#[panic_handler]`**：格式化或最小化 panic 信息输出路径（UART 或内存环）。
+- [x] **向量表**：`VBAR_ELx` 设置；`sync` / `irq` / `fiq` / `SError` 入口汇编桩；默认死循环或转发到 Rust `handle_exception(reason)`。
+- [x] **EL 选择**：文档 + 代码一致（如长期 EL1 或先 EL2 再降级）；与 [BOOT.md](./BOOT.md) 交叉引用。
 
 ---
 
@@ -39,8 +57,8 @@
 
 ### 协作式调度（优先实现路径）
 
-- [ ] **线程 / 任务控制块（TCB）**：状态（就绪、运行、阻塞、退出）、优先级字段、内核栈指针。
-- [ ] **就绪队列**：同优先级 FIFO 或多队列；`schedule()` / `yield()` 入口。
+- [x] **线程 / 任务控制块（TCB）**：状态（就绪、运行、阻塞、退出）、优先级字段、内核栈指针。
+- [x] **就绪队列**：同优先级 FIFO 或多队列；`schedule()` / `yield()` 入口。
 - [ ] **自愿阻塞原语**：与 IPC 或 `wait_timeout` 对接的最小阻塞队列。
 
 ### 抢占与时间
@@ -140,13 +158,13 @@
 
 ### 与 `hawthorn_kernel` 联动
 
-- [ ] `qemu_minimal` 通过 **`hawthorn_kernel::...` 公开 API** 打印第二行或注册 noop 任务；`Cargo.toml` feature 边界清晰。
+- [x] `qemu_minimal` 通过 **`hawthorn_kernel::...` 公开 API** 打印第二行或注册 noop 任务；`Cargo.toml` feature 边界清晰。
 - [ ] **可选**：拆出 `kernel_tests` 或 `examples/` 下第二个 bin，仅用于集成验证。
 
 ### 中断与时间基
 
-- [ ] **GICv3**（`virt` 默认）或 GICv2：使能 PPI **generic physical timer**；异常路由到当前实现。
-- [ ] **最小 IRQ handler**：计数或喂狗占位；与调度器「时间片抢占」预留钩子。
+- [x] **GICv3**（`virt` 默认）或 GICv2：使能 PPI **generic physical timer**；异常路由到当前实现。
+- [x] **最小 IRQ handler**：计数或喂狗占位；与调度器「时间片抢占」预留钩子。
 
 ### 设备树（FDT）
 

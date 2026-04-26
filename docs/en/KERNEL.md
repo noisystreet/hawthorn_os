@@ -98,6 +98,8 @@ Suggested minimal object types (names may vary):
 - **Migration (SMP):** document **worst-case migration** and lock hold time for pinned vs global queues.  
 - **IPC interaction:** blocking recv → **blocked**; non-blocking send / timeouts coordinated with IPC.
 
+**Current implementation (M3):** `task.rs` implements a **cooperative scheduler MVP** — `yield_now()` explicitly yields the CPU, no preemption. TCB has 5 states (Unused / Ready / Running / Blocked / Exited), `TaskContext` saves callee-saved registers (x19–x30), `context_switch` asm uses x2 as SP intermediate (AArch64 disallows `str sp`). New tasks enter via `task_trampoline`; if the entry returns, `task_exit` is invoked. Next step: M4 will add time-slice preemption and blocking primitives.
+
 ### 3.4 IPC (`ipc`)
 
 - **Sync messages:** `call`/`reply` or rendezvous; **bounded** payload (registers + optional cap-authorized shared pages).  
@@ -118,11 +120,15 @@ Suggested minimal object types (names may vary):
 - **Bottom halves:** no long logic in ISR; wake high-priority thread or **message** driver service.  
 - **Stacks / nesting:** document **per-exception stacks** and max nesting depth.
 
+**Current implementation (M2):** `trap.rs` sets `VBAR_EL1`, 16-slot vector table via `global_asm!`. EL1 IRQ dispatches to `irq::dispatch()` (not a stub). `gic.rs` implements GICv3 single-core init (Distributor / Redistributor SGI base page / CPU Interface), `ack()` reads `ICC_IAR1_EL1`, `eoi()` writes `ICC_EOIR1_EL1`. `irq.rs` maintains a 1020-slot handler table; `register()` also enables the interrupt on the GIC side. The first registered IRQ handler is Timer PPI 30.
+
 ### 3.7 Time (`time`)
 
 - **Tick source:** HW timer + optional tickless impact on **sched clock**.  
 - **Timeouts:** relative/absolute on IPC/blocking; clock skew policy.  
 - **Userland:** NTP/PTP in services; kernel may expose **read clock** + **timer objects** if in minimal object set.
+
+**Current implementation (M3):** `timer.rs` drives the EL1 Physical Timer (PPI IRQ 30), reads frequency from `CNTFRQ_EL0` (62.5 MHz on QEMU virt), default 10 ms periodic tick (writes `CNTP_TVAL_EL0`). `handle_irq()` increments monotonic `TICK_COUNT`, prints every 100 ticks. IRQs are enabled at end of `kernel_main` via `msr daifclr, #2`. Currently pure periodic tick, no tickless; M4 will add wait queues and `task::sleep(ms)` blocking primitive.
 
 ### 3.8 Syscalls (`syscall`)
 

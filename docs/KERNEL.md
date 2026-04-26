@@ -98,6 +98,8 @@ Bootloader / **TF-A** 移交的 **异常级（EL）**、入口 PC、设备树指
 - **迁移（SMP 预留）**：线程绑定 CPU 或 **全局队列** 策略二选一时，文档化 **最坏迁移开销** 与锁持有时间。
 - **与 IPC 关系**：阻塞式接收导致 **阻塞态**；发送非阻塞或带超时由 IPC 层与调度协同。
 
+**当前实现（M3）**：`task.rs` 实现了 **协作式调度 MVP**——`yield_now()` 显式让出 CPU，无抢占。TCB 含 5 种状态（Unused / Ready / Running / Blocked / Exited），`TaskContext` 保存 callee-saved 寄存器（x19–x30），`context_switch` 汇编用 x2 中转 SP（AArch64 不允许 `str sp`）。任务通过 `task_trampoline` 入口启动，返回后跳 `task_exit`。下一步：M4 将加入时间片抢占和阻塞原语。
+
 ### 3.4 IPC 子系统（`ipc`）
 
 - **同步消息**：`call` / `reply` 或 **rendezvous** 模型；消息负载 **有上界**（小消息寄存器传递 + 可选页内共享窗口由能力授权）。
@@ -118,11 +120,15 @@ Bootloader / **TF-A** 移交的 **异常级（EL）**、入口 PC、设备树指
 - **下半部**：长逻辑不在 ISR；通过 **唤醒高优先级线程** 或 **向驱动服务发消息** 完成。
 - **栈与嵌套**：文档化 **每级异常栈** 与最大嵌套深度，防止栈溢出。
 
+**当前实现（M2）**：`trap.rs` 设置 `VBAR_EL1`，16 槽向量表以 `global_asm!` 内联。EL1 IRQ 分发到 `irq::dispatch()`（而非桩）。`gic.rs` 实现 GICv3 单核初始化（Distributor / Redistributor SGI base page / CPU Interface），`ack()` 读 `ICC_IAR1_EL1`，`eoi()` 写 `ICC_EOIR1_EL1`。`irq.rs` 维护 1020 槽 handler 表，`register()` 同时在 GIC 侧使能中断。第一个注册的 IRQ handler 为 Timer PPI 30。
+
 ### 3.7 时间子系统（`time`）
 
 - **节拍源**：硬件定时器 + tickless（若启用）对 **调度时钟** 的影响需评估。
 - **超时**：IPC 与阻塞原语上的 **相对/绝对超时** 与时钟漂移策略。
 - **与用户态**：授时、NTP/PTP 等仍在服务中；内核提供 **读时钟** 与 **定时器对象**（若纳入最小对象集）。
+
+**当前实现（M3）**：`timer.rs` 驱动 EL1 Physical Timer（PPI IRQ 30），从 `CNTFRQ_EL0` 读取频率（QEMU virt 上为 62.5 MHz），默认 10 ms 周期 tick（写入 `CNTP_TVAL_EL0`）。`handle_irq()` 递增单调 `TICK_COUNT`，每 100 个 tick 打印一次。IRQ 在 `kernel_main` 末尾通过 `msr daifclr, #2` 使能。当前为纯周期 tick，无 tickless；M4 将添加等待队列和 `task::sleep(ms)` 阻塞原语。
 
 ### 3.8 系统调用接口（`syscall`）
 

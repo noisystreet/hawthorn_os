@@ -6,6 +6,24 @@ This page lists **new runtime features and capabilities** planned for the repo. 
 
 ---
 
+## Current implemented modules (M1–M3)
+
+| Module | File | Functionality |
+|--------|------|---------------|
+| Boot | `boot_qemu_virt.rs` / `bin/qemu_virt.rs` | EL2→EL1 drop + MMU disable + BSS zero + PL011 init |
+| Console | `console.rs` | `print!` / `println!` macros over PL011 UART |
+| Exception/Vectors | `trap.rs` | `VBAR_EL1` 16-slot vector table, `TrapFrame`, `handle_exception` dispatch |
+| GICv3 | `gic.rs` | Distributor / Redistributor / CPU Interface init, `ack()` / `eoi()` |
+| IRQ dispatch | `irq.rs` | 1020-slot handler table, `register()` / `dispatch()` |
+| Timer | `timer.rs` | ARM Generic Timer (PPI 30), periodic tick, frequency from `CNTFRQ_EL0` |
+| Task scheduler | `task.rs` | Cooperative scheduler MVP: TCB / `create()` / `yield_now()` / `context_switch` asm / `task_exit` |
+
+**Boot sequence**: `_start` (EL2→EL1) → `kernel_main`: BSS → UART → `trap::init()` → `gic::init()` → `irq::init()` → `timer::init()` → `task::init()` → enable IRQ → idle `yield_now()` loop
+
+**QEMU verified**: Tasks A/B alternate + Timer tick every 10 ms + idle continues after task exit
+
+---
+
 ## Kernel foundations and object model
 
 ### Module boundaries and dependency graph
@@ -28,10 +46,10 @@ This page lists **new runtime features and capabilities** planned for the repo. 
 
 ### Boot, panic, and exception vectors
 
-- [ ] **Boot chain**: `_start` (asm) → stack / BSS → Rust `kernel_main` (or equivalent); align with `link-qemu_virt.ld` / future board scripts.
-- [ ] **`#[panic_handler]`**: path for formatted or minimal panic output (UART or in-memory ring).
-- [ ] **Vector table**: set `VBAR_ELx`; `sync` / `irq` / `fiq` / `SError` asm stubs; default hang or forward to Rust `handle_exception(reason)`.
-- [ ] **EL choice**: docs + code agree (e.g. long-term EL1 vs start at EL2 then drop); cross-link [BOOT.md](../BOOT.md).
+- [x] **Boot chain**: `_start` (asm) → stack / BSS → Rust `kernel_main` (or equivalent); align with `link-qemu_virt.ld` / future board scripts.
+- [x] **`#[panic_handler]`**: path for formatted or minimal panic output (UART or in-memory ring).
+- [x] **Vector table**: set `VBAR_ELx`; `sync` / `irq` / `fiq` / `SError` asm stubs; default hang or forward to Rust `handle_exception(reason)`.
+- [x] **EL choice**: docs + code agree (e.g. long-term EL1 vs start at EL2 then drop); cross-link [BOOT.md](../BOOT.md).
 
 ---
 
@@ -39,8 +57,8 @@ This page lists **new runtime features and capabilities** planned for the repo. 
 
 ### Cooperative scheduling (preferred first path)
 
-- [ ] **TCB**: states (ready, running, blocked, exited), priority field, kernel stack pointer.
-- [ ] **Ready queues**: FIFO within priority or multiple queues; `schedule()` / `yield()` entry points.
+- [x] **TCB**: states (ready, running, blocked, exited), priority field, kernel stack pointer.
+- [x] **Ready queues**: FIFO within priority or multiple queues; `schedule()` / `yield()` entry points.
 - [ ] **Voluntary block**: minimal wait queue wired to IPC or `wait_timeout`.
 
 ### Preemption and time
@@ -140,13 +158,13 @@ This page lists **new runtime features and capabilities** planned for the repo. 
 
 ### Integration with `hawthorn_kernel`
 
-- [ ] `qemu_minimal` calls **`hawthorn_kernel::...` public API** for a second line or noop task; clear `Cargo.toml` `feature` edges.
+- [x] `qemu_minimal` calls **`hawthorn_kernel::...` public API** for a second line or noop task; clear `Cargo.toml` `feature` edges.
 - [ ] **Optional**: second `bin` under `examples/` for integration-only builds.
 
 ### Interrupts and time base
 
-- [ ] **GICv3** (default on `virt`) or GICv2: enable PPI **generic physical timer**; route IRQs to the current handler.
-- [ ] **Minimal IRQ handler**: count or placeholder “pet”; hook for future time-slice preemption.
+- [x] **GICv3** (default on `virt`) or GICv2: enable PPI **generic physical timer**; route IRQs to the current handler.
+- [x] **Minimal IRQ handler**: count or placeholder "pet"; hook for future time-slice preemption.
 
 ### Device tree (FDT)
 
