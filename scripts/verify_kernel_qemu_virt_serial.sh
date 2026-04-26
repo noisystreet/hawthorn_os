@@ -62,7 +62,7 @@ fi
 set +e
 if ((${#STDBUF[@]} > 0)); then
   "${STDBUF[@]}" timeout 8 qemu-system-aarch64 \
-    -machine virt \
+    -machine virt,gic-version=3 \
     -cpu cortex-a76 \
     -display none \
     -kernel "${BIN}" \
@@ -70,7 +70,7 @@ if ((${#STDBUF[@]} > 0)); then
     -serial chardev:ser
 else
   timeout 8 qemu-system-aarch64 \
-    -machine virt \
+    -machine virt,gic-version=3 \
     -cpu cortex-a76 \
     -display none \
     -kernel "${BIN}" \

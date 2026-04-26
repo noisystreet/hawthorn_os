@@ -8,6 +8,12 @@ pub mod boot_qemu_virt;
 pub mod console;
 
 #[cfg(all(target_arch = "aarch64", target_os = "none"))]
+pub mod gic;
+
+#[cfg(all(target_arch = "aarch64", target_os = "none"))]
+pub mod irq;
+
+#[cfg(all(target_arch = "aarch64", target_os = "none"))]
 pub mod trap;
 
 /// 占位符号，便于空 crate 在 host 上通过 `cargo check`（裸机路径见 `boot_qemu_virt`）。

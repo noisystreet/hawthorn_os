@@ -48,7 +48,7 @@ Current stage (M2, EL1 kernel only), **active slots** are:
 | Offset   | Purpose                                | Initial Implementation               |
 |----------|----------------------------------------|--------------------------------------|
 | `0x200`  | EL1 synchronous exception (SPx)        | Print ESR/ELR/FAR, infinite loop     |
-| `0x280`  | EL1 IRQ (SPx)                          | Stub: GIC acknowledge, return        |
+| `0x280`  | EL1 IRQ (SPx)                          | GICv3 acknowledge → `irq::dispatch()` → EOI |
 | `0x300`  | EL1 FIQ (SPx)                          | Unused, infinite loop                |
 | `0x380`  | EL1 SError (SPx)                       | Print ESR, infinite loop             |
 | `0x400`  | EL0→EL1 sync exception (AArch64)       | Syscall entry (SVC #0)              |
@@ -230,7 +230,7 @@ IRQ entry (assembly)
     → eret
 ```
 
-**M2 stage**: IRQ handler contains only a GIC acknowledge + EOI stub, no device interrupts are wired. Actual device interrupts will be connected after GICv3 init + Timer driver are ready.
+**M2 stage**: IRQ handler routes through `irq::dispatch()` to registered handlers (`gic::ack()` → table lookup → call handler → `gic::eoi()`). Unregistered interrupt numbers perform acknowledge + EOI only and return. Device-specific interrupts are registered via `irq::register()` once their drivers are ready.
 
 ---
 
@@ -250,7 +250,7 @@ Total size: 32 × 8 = 256 bytes, matching the `sub sp, sp, #256` in assembly.
 
 ## 7. Initialization
 
-In `kernel_main`, the exception vector table must be registered **after BSS zeroing + UART init, but before any operation that could trigger an exception**:
+In `kernel_main`, the exception vector table must be registered **after BSS zeroing + UART init, but before any operation that could trigger an exception**. GICv3 and the IRQ dispatch framework are initialized immediately after:
 
 ```rust
 pub extern "C" fn kernel_main() -> ! {
@@ -260,9 +260,13 @@ pub extern "C" fn kernel_main() -> ! {
     // Set up exception vector table
     trap::init();
 
+    // Initialize GICv3 (Distributor + Redistributor + CPU Interface)
+    unsafe { gic::init() };
+
+    // Initialize IRQ dispatch table (must follow GIC init)
+    irq::init();
+
     crate::println!("Hawthorn: hawthorn_kernel on QEMU virt OK");
-    // From here, any exception is caught by the vector table
-    // instead of jumping to 0x200 and looping
     loop { core::hint::spin_loop(); }
 }
 ```
@@ -306,14 +310,16 @@ In the vector table assembly, use `.section .text.vector, "ax"` + `.align 12` (4
 
 ```
 kernel/src/
-├── trap/
-│   ├── mod.rs           # pub fn init(), TrapFrame, ExceptionKind, handle_exception()
-│   └── vector.asm       # 16 vector slot assembly entries (global_asm! or .S file)
-├── boot_qemu_virt.rs    # kernel_main calls trap::init()
-└── lib.rs               # pub mod trap;
+├── trap.rs             # pub fn init(), TrapFrame, ExceptionKind, handle_exception()
+├── gic.rs              # GICv3 driver: Distributor / Redistributor / CPU Interface init
+├── irq.rs              # IRQ dispatch framework: register / unregister / dispatch
+├── boot_qemu_virt.rs   # kernel_main calls trap::init() → gic::init() → irq::init()
+└── lib.rs              # pub mod trap; pub mod gic; pub mod irq;
 ```
 
-- `trap/mod.rs`: Rust-side dispatch logic, `TrapFrame` definition, `ExceptionKind` enum.
+- `trap/mod.rs`: Rust-side dispatch logic, `TrapFrame` definition, `ExceptionKind` enum. IRQ exceptions dispatch to `irq::dispatch()`.
+- `gic.rs`: GICv3 driver (Distributor / Redistributor / CPU Interface initialization and interrupt enable/disable).
+- `irq.rs`: IRQ dispatch framework, maintains a 1020-slot handler table, provides `register` / `unregister` / `dispatch`.
 - `trap/vector.asm`: 16 vector slot assembly entries. Recommended to use Rust `global_asm!` macro inline to keep a single crate without extra `.S` files. If the assembly is long, split into `trap/vector.s` and compile via `build.rs`.
 
 ---
@@ -322,7 +328,7 @@ kernel/src/
 
 | Milestone | Extension                                                  |
 |-----------|------------------------------------------------------------|
-| M2        | EL1 vector table + EL1 sync diagnostics + IRQ stub         |
+| M2        | EL1 vector table + EL1 sync diagnostics + GICv3 init + IRQ dispatch |
 | M3        | SVC entry (`ESR.EC = 0x15`) → syscall dispatch            |
 | M3        | EL0 Data/Instruction Abort → page fault or thread kill     |
 | M3+       | Per-thread kernel stack (TCB.kernel_sp), context switch SP |

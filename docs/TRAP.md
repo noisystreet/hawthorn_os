@@ -48,7 +48,7 @@ AArch64 `VBAR_EL1` 指向 16 个 128 字节（0x80）对齐的向量槽。每个
 | 偏移     | 用途                                   | 初始实现                    |
 |----------|----------------------------------------|-----------------------------|
 | `0x200`  | EL1 同步异常（SPx）                    | 打印 ESR/ELR/FAR，死循环    |
-| `0x280`  | EL1 IRQ（SPx）                         | 桩：确认 GIC，返回          |
+| `0x280`  | EL1 IRQ（SPx）                         | GICv3 acknowledge → `irq::dispatch()` → EOI |
 | `0x300`  | EL1 FIQ（SPx）                         | 未使用，死循环              |
 | `0x380`  | EL1 SError（SPx）                      | 打印 ESR，死循环            |
 | `0x400`  | EL0→EL1 同步异常（AArch64）            | 系统调用入口（SVC #0）      |
@@ -230,7 +230,7 @@ IRQ 入口 (汇编)
     → eret
 ```
 
-**M2 阶段**：IRQ handler 仅包含 GIC acknowledge + EOI 桩，不挂接具体设备中断。实际设备中断在 GICv3 初始化 + Timer 驱动就绪后挂接。
+**M2 阶段**：IRQ handler 通过 `irq::dispatch()` 路由到已注册的处理函数（`gic::ack()` → 查表调用 handler → `gic::eoi()`）。未注册中断号仅执行 acknowledge + EOI 后返回。具体设备中断在对应驱动就绪后通过 `irq::register()` 注册。
 
 ---
 
@@ -250,7 +250,7 @@ struct TrapFrame {
 
 ## 7. 初始化流程
 
-在 `kernel_main` 中，异常向量表应在 **BSS 清零 + UART 初始化之后、任何可能触发异常的操作之前** 注册：
+在 `kernel_main` 中，异常向量表应在 **BSS 清零 + UART 初始化之后、任何可能触发异常的操作之前** 注册。GICv3 与 IRQ 分发框架紧跟其后初始化：
 
 ```rust
 pub extern "C" fn kernel_main() -> ! {
@@ -260,8 +260,13 @@ pub extern "C" fn kernel_main() -> ! {
     // 设置异常向量表
     trap::init();
 
+    // 初始化 GICv3（Distributor + Redistributor + CPU Interface）
+    unsafe { gic::init() };
+
+    // 初始化 IRQ 分发表（须在 GIC 之后）
+    irq::init();
+
     crate::println!("Hawthorn: hawthorn_kernel on QEMU virt OK");
-    // 此后任何异常都会被向量表捕获，而非跳到 0x200 死循环
     loop { core::hint::spin_loop(); }
 }
 ```
@@ -305,14 +310,16 @@ pub fn init() {
 
 ```
 kernel/src/
-├── trap/
-│   ├── mod.rs           # pub fn init(), TrapFrame, ExceptionKind, handle_exception()
-│   └── vector.asm       # 16 个向量槽的汇编入口（global_asm! 或 .S 文件）
-├── boot_qemu_virt.rs    # kernel_main 中调用 trap::init()
-└── lib.rs               # pub mod trap;
+├── trap.rs             # pub fn init(), TrapFrame, ExceptionKind, handle_exception()
+├── gic.rs              # GICv3 驱动：Distributor / Redistributor / CPU Interface 初始化
+├── irq.rs              # IRQ 分发框架：register / unregister / dispatch
+├── boot_qemu_virt.rs   # kernel_main 中调用 trap::init() → gic::init() → irq::init()
+└── lib.rs              # pub mod trap; pub mod gic; pub mod irq;
 ```
 
-- `trap/mod.rs`：Rust 侧的分发逻辑、`TrapFrame` 定义、`ExceptionKind` 枚举。
+- `trap/mod.rs`：Rust 侧的分发逻辑、`TrapFrame` 定义、`ExceptionKind` 枚举。IRQ 异常分发到 `irq::dispatch()`。
+- `gic.rs`：GICv3 驱动（Distributor / Redistributor / CPU Interface 初始化与中断使能/禁能）。
+- `irq.rs`：IRQ 分发框架，维护 1020 槽的处理函数表，提供 `register` / `unregister` / `dispatch`。
 - `trap/vector.asm`：16 个向量槽汇编入口。建议使用 Rust `global_asm!` 宏内联，保持单一 crate 无需额外 `.S` 文件。若汇编较长，可拆为 `trap/vector.s` 并在 `build.rs` 中编译。
 
 ---
@@ -321,7 +328,7 @@ kernel/src/
 
 | 里程碑 | 扩展内容                                          |
 |--------|---------------------------------------------------|
-| M2     | EL1 向量表 + EL1 sync 打印诊断 + IRQ 桩           |
+| M2     | EL1 向量表 + EL1 sync 打印诊断 + GICv3 初始化 + IRQ 分发 |
 | M3     | SVC 入口（`ESR.EC = 0x15`）→ syscall 分发         |
 | M3     | EL0 Data/Instruction Abort → 缺页处理或线程终止    |
 | M3+    | 每线程内核栈（TCB.kernel_sp），上下文切换修改 SP   |

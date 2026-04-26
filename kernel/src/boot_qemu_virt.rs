@@ -116,7 +116,7 @@ impl fmt::Write for Pl011 {
     }
 }
 
-/// Rust entry from `_start` (see `src/bin/qemu_virt.rs`): BSS → UART → trap → banner → idle loop.
+/// Rust entry from `_start` (see `src/bin/qemu_virt.rs`): BSS → UART → trap → GIC → IRQ → banner → idle loop.
 #[no_mangle]
 pub extern "C" fn kernel_main() -> ! {
     // SAFETY: early boot on `virt`; linker defines BSS bounds.
@@ -125,6 +125,10 @@ pub extern "C" fn kernel_main() -> ! {
     unsafe { pl011_init() };
     // Install exception vector table before any operation that may fault.
     crate::trap::init();
+    // SAFETY: GICv3 MMIO base addresses are fixed on QEMU `virt`.
+    unsafe { crate::gic::init() };
+    // Initialize IRQ dispatch table (must follow GIC init).
+    crate::irq::init();
     // SAFETY: UART initialized above.
     crate::println!("Hawthorn: hawthorn_kernel on QEMU virt OK");
     loop {

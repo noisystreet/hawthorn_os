@@ -30,13 +30,13 @@ say ""
 # stdbuf：尽量行缓冲，便于立刻看到 PL011 输出（若环境有 stdbuf）。
 if command -v stdbuf >/dev/null 2>&1; then
   exec stdbuf -oL -eL qemu-system-aarch64 \
-    -machine virt \
+    -machine virt,gic-version=3 \
     -cpu cortex-a76 \
     -nographic \
     -kernel "${BIN}"
 else
   exec qemu-system-aarch64 \
-    -machine virt \
+    -machine virt,gic-version=3 \
     -cpu cortex-a76 \
     -nographic \
     -kernel "${BIN}"
