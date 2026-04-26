@@ -116,13 +116,15 @@ impl fmt::Write for Pl011 {
     }
 }
 
-/// Rust entry from `_start` (see `src/bin/qemu_virt.rs`): BSS → UART → banner → idle loop.
+/// Rust entry from `_start` (see `src/bin/qemu_virt.rs`): BSS → UART → trap → banner → idle loop.
 #[no_mangle]
 pub extern "C" fn kernel_main() -> ! {
     // SAFETY: early boot on `virt`; linker defines BSS bounds.
     unsafe { zero_bss() };
     // SAFETY: fixed PL011 mapping for this platform.
     unsafe { pl011_init() };
+    // Install exception vector table before any operation that may fault.
+    crate::trap::init();
     // SAFETY: UART initialized above.
     crate::println!("Hawthorn: hawthorn_kernel on QEMU virt OK");
     loop {

@@ -9,6 +9,7 @@ MEMORY {
 SECTIONS {
   .text : {
     KEEP(*(.text.boot))
+    KEEP(*(.text.vector))
     *(.text .text.*)
   } > RAM
 
