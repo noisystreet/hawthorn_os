@@ -19,6 +19,7 @@
 | [COMMIT_CONVENTIONS.md](./COMMIT_CONVENTIONS.md) | [en/COMMIT_CONVENTIONS.md](./en/COMMIT_CONVENTIONS.md) |
 | [TODO.md](./TODO.md) | [en/TODO.md](./en/TODO.md) |
 | [PR_ISSUE_PLAN.md](./PR_ISSUE_PLAN.md) | [en/PR_ISSUE_PLAN.md](./en/PR_ISSUE_PLAN.md) |
+| [M6_MMU_DEBUG_LOG.md](./M6_MMU_DEBUG_LOG.md) | [en/M6_MMU_DEBUG_LOG.md](./en/M6_MMU_DEBUG_LOG.md) |
 
 双语同步规则见 [`.cursor/rules/hawthorn-docs-bilingual.mdc`](../.cursor/rules/hawthorn-docs-bilingual.mdc)。
 

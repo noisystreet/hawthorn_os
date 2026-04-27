@@ -8,10 +8,16 @@ pub mod boot_qemu_virt;
 pub mod console;
 
 #[cfg(all(target_arch = "aarch64", target_os = "none"))]
+pub mod frame_alloc;
+
+#[cfg(all(target_arch = "aarch64", target_os = "none"))]
 pub mod gic;
 
 #[cfg(all(target_arch = "aarch64", target_os = "none"))]
 pub mod irq;
+
+#[cfg(all(target_arch = "aarch64", target_os = "none"))]
+pub mod mm;
 
 #[cfg(all(target_arch = "aarch64", target_os = "none"))]
 pub mod syscall;

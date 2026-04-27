@@ -123,8 +123,25 @@ pub extern "C" fn kernel_main() -> ! {
     unsafe { zero_bss() };
     // SAFETY: fixed PL011 mapping for this platform.
     unsafe { pl011_init() };
-    // Install exception vector table before any operation that may fault.
+    // Step 2: Initialize frame allocator and verify
+    crate::frame_alloc::init();
+    // Test allocation
+    if let Some(frame) = crate::frame_alloc::alloc_frame() {
+        crate::println!("[step2] frame_alloc OK, allocated frame at {:#x}", frame);
+        crate::frame_alloc::free_frame(frame);
+    } else {
+        crate::println!("[step2] ERROR: frame_alloc failed!");
+    }
+    // Step 3: Create page tables and dump for verification
+    crate::mm::init();
+    crate::println!("[step3] page tables created, dumping...");
+    crate::mm::dump_tables();
+    // Install VBAR before enabling the MMU so prefetch/data aborts are diagnosable.
     crate::trap::init();
+    // Step 4: Enable MMU (MAIR/TCR/TTBR0 only, verify by readback)
+    crate::mm::enable_mmu_step4();
+    // Step 5: Enable SCTLR.M and verify
+    crate::mm::enable_mmu_step5();
     // SAFETY: GICv3 MMIO base addresses are fixed on QEMU `virt`.
     unsafe { crate::gic::init() };
     // Initialize IRQ dispatch table (must follow GIC init).
