@@ -133,6 +133,7 @@ M1–M3 已全部完成。以下为建议的第二阶段里程碑与对应 Issue
 - CI 已加入两条串口回归：
   - `scripts/verify_kernel_qemu_virt_serial.sh`
   - `scripts/verify_kernel_qemu_virt_el0_serial.sh`
+- M7-W2（IPC MVP）🔄：`endpoint` + `SYS_ENDPOINT_{CREATE,DESTROY,CALL,RECV,REPLY}`；当前为 **≤32 位** 载荷 MVP，`call/recv` 在无对手就绪时返回 **`EAGAIN`（-11）** 由调用方轮询（`verify_kernel_qemu_virt_el0_serial.sh` 覆盖 EL1 `task E/D` 串口回环）。真正 **≤128B** 与 **双 EL0** 任务回环仍为后续。
 
 > 注：当前 M6 属于“可运行 MVP”，尚有隔离强化与生命周期完善空间（见下文 M7 拆分）。
 

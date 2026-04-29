@@ -256,18 +256,25 @@ pub extern "C" fn kernel_main() -> ! {
         let endpoint_id = 0u64;
         crate::println!("[task D] using endpoint {}", endpoint_id);
 
-        let call_ret: u64;
-        unsafe {
-            asm!(
-                "mov x8, #8",
-                "mov x0, {id}",
-                "mov x1, #42",
-                "svc #0",
-                "mov {ret}, x0",
-                id = in(reg) endpoint_id,
-                ret = out(reg) call_ret,
-            );
-        }
+        let call_ret = loop {
+            let ret: u64;
+            unsafe {
+                asm!(
+                    "mov x8, #8",
+                    "mov x0, {id}",
+                    "mov x1, #42",
+                    "svc #0",
+                    "mov {ret}, x0",
+                    id = in(reg) endpoint_id,
+                    ret = out(reg) ret,
+                );
+            }
+            if (ret as i64) == -11 {
+                crate::task::yield_now();
+                continue;
+            }
+            break ret;
+        };
         crate::println!(
             "[task D] endpoint_call returned {} (expect 43)",
             call_ret as i64
@@ -289,17 +296,24 @@ pub extern "C" fn kernel_main() -> ! {
         }
         crate::println!("[task E] endpoint_create returned {}", endpoint_id);
 
-        let packed: u64;
-        unsafe {
-            asm!(
-                "mov x8, #9",
-                "mov x0, {id}",
-                "svc #0",
-                "mov {out}, x0",
-                id = in(reg) endpoint_id,
-                out = out(reg) packed,
-            );
-        }
+        let packed = loop {
+            let recv_ret: u64;
+            unsafe {
+                asm!(
+                    "mov x8, #9",
+                    "mov x0, {id}",
+                    "svc #0",
+                    "mov {out}, x0",
+                    id = in(reg) endpoint_id,
+                    out = out(reg) recv_ret,
+                );
+            }
+            if (recv_ret as i64) == -11 {
+                crate::task::sleep(1);
+                continue;
+            }
+            break recv_ret;
+        };
         let client_id = (packed >> 32) & 0xFFFF_FFFF;
         let request = packed & 0xFFFF_FFFF;
         crate::println!(

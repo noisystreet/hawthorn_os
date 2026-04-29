@@ -133,6 +133,7 @@ M5 and M6 can proceed partially in parallel (SVC dispatch and address space desi
 - CI now includes two serial regressions:
   - `scripts/verify_kernel_qemu_virt_serial.sh`
   - `scripts/verify_kernel_qemu_virt_el0_serial.sh`
+- M7-W2 (IPC MVP) 🔄: `endpoint` + `SYS_ENDPOINT_{CREATE,DESTROY,CALL,RECV,REPLY}`; current MVP carries **≤32-bit** payloads and `call/recv` return **`EAGAIN` (-11)** when the peer is not ready (callers poll; `verify_kernel_qemu_virt_el0_serial.sh` covers the EL1 `task E/D` serial roundtrip). True **≤128B** payloads and a **dual-EL0** roundtrip remain follow-up work.
 
 > Note: current M6 is a runnable MVP; stronger isolation and lifecycle hardening are still pending (covered by the M7 split below).
 

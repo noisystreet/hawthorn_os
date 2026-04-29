@@ -17,19 +17,25 @@
 
 ---
 
-## 2. 系统调用号空间（占位）
+## 2. 系统调用号（草稿，随实现演进）
 
-建议分区（示例，未分配编号）：
+以下为 `hawthorn_syscall_abi` 当前已分配编号（**未冻结**）；语义以 `kernel/src/syscall.rs` 为准。
 
-| 区间用途 | 说明 |
-|----------|------|
-| 线程与调度 | 退出、yield、优先级等 |
-| IPC | send、recv、reply、endpoint 管理等 |
-| 内存与能力 | 映射、撤销、能力派生等 |
-| 中断与通知 | IRQ 绑定、notification 信号等 |
-| 调试 | 可选，发布版编译裁剪 |
+| 编号 | 常量 | 参数（`x0`–`x5`） | 返回值 `x0` |
+|------|------|-------------------|-------------|
+| 0 | `SYS_WRITE` | `fd`, `buf`, `len` | 写入字节数；错误为负 errno |
+| 1 | `SYS_READ` | （预留） | `ENOSYS` |
+| 2 | `SYS_YIELD` | — | `0` |
+| 3 | `SYS_GETPID` | — | 当前任务 id |
+| 4 | `SYS_EXIT` | `code` | 不返回 |
+| 5 | `SYS_SLEEP` | `ms` | `0` |
+| 6 | `SYS_ENDPOINT_CREATE` | — | endpoint id；满表 `ENOMEM` |
+| 7 | `SYS_ENDPOINT_DESTROY` | `id` | 成功 `0`；`EINVAL`/`ENOENT`/`EPERM` |
+| 8 | `SYS_ENDPOINT_CALL` | `id`, `msg`（MVP：低 **32** 位） | 成功为 `reply` 的 **32** 位值；无对手就绪 **`EAGAIN`（-11）** |
+| 9 | `SYS_ENDPOINT_RECV` | `id` | 成功为 `(client_id << 32) \| request`（各 **32** 位）；无消息 **`EAGAIN`（-11）** |
+| 10 | `SYS_ENDPOINT_REPLY` | `id`, `client_id`, `msg`（MVP：低 **32** 位） | 成功 `0` |
 
-正式编号表在首次 ABI 冻结时写入本节并生成 `syscall_abi` 常量。
+冻结前仍可按 [TODO.md](./TODO.md) 与 issue 计划调整编号与参数。
 
 ---
 

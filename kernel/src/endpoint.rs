@@ -2,8 +2,11 @@
 
 //! Minimal endpoint object table for IPC MVP.
 //!
-//! This module provides endpoint lifecycle and a small synchronous rendezvous:
-//! call -> recv -> reply.
+//! This module provides endpoint lifecycle and a small rendezvous path:
+//! **call → recv → reply**.
+//!
+//! When the peer is not ready, [`call`] / [`recv`] return [`Errno::EAGAIN`]
+//! so callers can poll (e.g. `yield` / `sleep`) without blocking inside the kernel.
 
 use hawthorn_syscall_abi::Errno;
 
@@ -22,7 +25,6 @@ const INVALID_TASK_ID: u16 = u16::MAX;
 struct Endpoint {
     in_use: bool,
     owner: TaskId,
-    waiting_server: TaskId,
     has_pending_call: bool,
     pending_client: TaskId,
     pending_msg: u64,
@@ -32,7 +34,6 @@ impl Endpoint {
     const EMPTY: Self = Self {
         in_use: false,
         owner: TaskId(0),
-        waiting_server: TaskId(INVALID_TASK_ID),
         has_pending_call: false,
         pending_client: TaskId(INVALID_TASK_ID),
         pending_msg: 0,
@@ -130,6 +131,11 @@ fn call_with_caller(id: u64, msg: u64, caller: TaskId) -> Result<u64, Errno> {
     }
 
     unsafe {
+        if REPLY_READY[caller_idx] {
+            REPLY_READY[caller_idx] = false;
+            return Ok(REPLY_VALUE[caller_idx]);
+        }
+
         let ep = &mut ENDPOINT_TABLE[idx];
         if !ep.in_use {
             return Err(Errno::ENOENT);
@@ -145,23 +151,8 @@ fn call_with_caller(id: u64, msg: u64, caller: TaskId) -> Result<u64, Errno> {
         ep.pending_client = caller;
         ep.pending_msg = msg;
         REPLY_READY[caller_idx] = false;
-
-        if ep.waiting_server.0 != INVALID_TASK_ID {
-            let server = ep.waiting_server;
-            ep.waiting_server = TaskId(INVALID_TASK_ID);
-            unblock_task(server);
-        }
     }
-
-    loop {
-        unsafe {
-            if REPLY_READY[caller_idx] {
-                REPLY_READY[caller_idx] = false;
-                return Ok(REPLY_VALUE[caller_idx]);
-            }
-        }
-        block_current_task();
-    }
+    Err(Errno::EAGAIN)
 }
 
 fn recv_with_caller(id: u64, caller: TaskId) -> Result<u64, Errno> {
@@ -170,29 +161,25 @@ fn recv_with_caller(id: u64, caller: TaskId) -> Result<u64, Errno> {
         return Err(Errno::EINVAL);
     }
 
-    loop {
-        unsafe {
-            let ep = &mut ENDPOINT_TABLE[idx];
-            if !ep.in_use {
-                return Err(Errno::ENOENT);
-            }
-            if ep.owner != caller {
-                return Err(Errno::EPERM);
-            }
-
-            if ep.has_pending_call {
-                let client = ep.pending_client.0 as u64;
-                let msg = ep.pending_msg & 0xFFFF_FFFF;
-                ep.has_pending_call = false;
-                ep.pending_client = TaskId(INVALID_TASK_ID);
-                ep.pending_msg = 0;
-                return Ok((client << 32) | msg);
-            }
-
-            ep.waiting_server = caller;
+    unsafe {
+        let ep = &mut ENDPOINT_TABLE[idx];
+        if !ep.in_use {
+            return Err(Errno::ENOENT);
         }
-        block_current_task();
+        if ep.owner != caller {
+            return Err(Errno::EPERM);
+        }
+
+        if ep.has_pending_call {
+            let client = ep.pending_client.0 as u64;
+            let msg = ep.pending_msg & 0xFFFF_FFFF;
+            ep.has_pending_call = false;
+            ep.pending_client = TaskId(INVALID_TASK_ID);
+            ep.pending_msg = 0;
+            return Ok((client << 32) | msg);
+        }
     }
+    Err(Errno::EAGAIN)
 }
 
 fn reply_with_caller(id: u64, client_id: u64, msg: u64, caller: TaskId) -> Result<(), Errno> {
@@ -217,7 +204,6 @@ fn reply_with_caller(id: u64, client_id: u64, msg: u64, caller: TaskId) -> Resul
         REPLY_VALUE[client_idx] = msg;
         REPLY_READY[client_idx] = true;
     }
-    unblock_task(TaskId(client_id as u16));
     Ok(())
 }
 
@@ -226,85 +212,83 @@ fn current_task_id() -> TaskId {
     crate::task::current_id()
 }
 
-#[cfg(all(target_arch = "aarch64", target_os = "none"))]
-fn block_current_task() {
-    crate::task::block();
-}
-
-#[cfg(all(target_arch = "aarch64", target_os = "none"))]
-fn unblock_task(id: TaskId) {
-    crate::task::unblock(id);
-}
-
 #[cfg(not(all(target_arch = "aarch64", target_os = "none")))]
 fn current_task_id() -> TaskId {
     TaskId(0)
 }
 
-#[cfg(not(all(target_arch = "aarch64", target_os = "none")))]
-fn block_current_task() {}
-
-#[cfg(not(all(target_arch = "aarch64", target_os = "none")))]
-fn unblock_task(_id: TaskId) {}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    /// Global endpoint table is `static mut`; default parallel unit tests would race.
+    static TABLE_LOCK: Mutex<()> = Mutex::new(());
+
+    fn with_table(f: impl FnOnce()) {
+        let _guard = TABLE_LOCK.lock().unwrap();
+        init();
+        f();
+    }
 
     #[test]
     fn create_allocates_until_full() {
-        init();
-        for i in 0..MAX_ENDPOINTS {
-            assert_eq!(create_with_owner(TaskId(1)), Some(i as u16));
-        }
-        assert_eq!(create_with_owner(TaskId(1)), None);
+        with_table(|| {
+            for i in 0..MAX_ENDPOINTS {
+                assert_eq!(create_with_owner(TaskId(1)), Some(i as u16));
+            }
+            assert_eq!(create_with_owner(TaskId(1)), None);
+        });
     }
 
     #[test]
     fn destroy_rejects_invalid_and_missing_endpoint() {
-        init();
-        assert_eq!(
-            destroy_with_caller(MAX_ENDPOINTS as u64, TaskId(1)),
-            Err(Errno::EINVAL)
-        );
-        assert_eq!(destroy_with_caller(0, TaskId(1)), Err(Errno::ENOENT));
+        with_table(|| {
+            assert_eq!(
+                destroy_with_caller(MAX_ENDPOINTS as u64, TaskId(1)),
+                Err(Errno::EINVAL)
+            );
+            assert_eq!(destroy_with_caller(0, TaskId(1)), Err(Errno::ENOENT));
+        });
     }
 
     #[test]
     fn destroy_checks_owner_permission() {
-        init();
-        let id = create_with_owner(TaskId(7)).unwrap();
-        assert_eq!(destroy_with_caller(id as u64, TaskId(8)), Err(Errno::EPERM));
-        assert_eq!(destroy_with_caller(id as u64, TaskId(7)), Ok(()));
-        assert_eq!(
-            destroy_with_caller(id as u64, TaskId(7)),
-            Err(Errno::ENOENT)
-        );
+        with_table(|| {
+            let id = create_with_owner(TaskId(7)).unwrap();
+            assert_eq!(destroy_with_caller(id as u64, TaskId(8)), Err(Errno::EPERM));
+            assert_eq!(destroy_with_caller(id as u64, TaskId(7)), Ok(()));
+            assert_eq!(
+                destroy_with_caller(id as u64, TaskId(7)),
+                Err(Errno::ENOENT)
+            );
+        });
     }
 
     #[test]
     fn call_recv_reply_roundtrip() {
-        init();
-        let endpoint = create_with_owner(TaskId(1)).unwrap();
+        with_table(|| {
+            let endpoint = create_with_owner(TaskId(1)).unwrap();
 
-        // Prepare a pending call as if client 2 already issued call().
-        unsafe {
-            ENDPOINT_TABLE[endpoint as usize].has_pending_call = true;
-            ENDPOINT_TABLE[endpoint as usize].pending_client = TaskId(2);
-            ENDPOINT_TABLE[endpoint as usize].pending_msg = 0x1234;
-        }
+            // Prepare a pending call as if client 2 already issued call().
+            unsafe {
+                ENDPOINT_TABLE[endpoint as usize].has_pending_call = true;
+                ENDPOINT_TABLE[endpoint as usize].pending_client = TaskId(2);
+                ENDPOINT_TABLE[endpoint as usize].pending_msg = 0x1234;
+            }
 
-        let packed = recv_with_caller(endpoint as u64, TaskId(1)).unwrap();
-        assert_eq!(packed >> 32, 2);
-        assert_eq!(packed & 0xFFFF_FFFF, 0x1234);
+            let packed = recv_with_caller(endpoint as u64, TaskId(1)).unwrap();
+            assert_eq!(packed >> 32, 2);
+            assert_eq!(packed & 0xFFFF_FFFF, 0x1234);
 
-        assert_eq!(
-            reply_with_caller(endpoint as u64, 2, 0x5678, TaskId(1)),
-            Ok(())
-        );
-        unsafe {
-            assert!(REPLY_READY[2]);
-            assert_eq!(REPLY_VALUE[2], 0x5678);
-        }
+            assert_eq!(
+                reply_with_caller(endpoint as u64, 2, 0x5678, TaskId(1)),
+                Ok(())
+            );
+            unsafe {
+                assert!(REPLY_READY[2]);
+                assert_eq!(REPLY_VALUE[2], 0x5678);
+            }
+        });
     }
 }

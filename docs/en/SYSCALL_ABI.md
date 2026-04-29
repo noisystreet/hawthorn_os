@@ -17,19 +17,25 @@ User services and the **Hawthorn (山楂) microkernel** interact through a **sta
 
 ---
 
-## 2. Syscall number space (placeholder)
+## 2. Syscall numbers (draft, evolving)
 
-Suggested partitions (numbers not assigned):
+The table below matches **`hawthorn_syscall_abi` today** (not frozen); semantics follow `kernel/src/syscall.rs`.
 
-| Range use | Description |
-|-----------|-------------|
-| Threads & scheduling | exit, yield, priority, … |
-| IPC | send, recv, reply, endpoint admin, … |
-| Memory & capabilities | map, revoke, derive, … |
-| IRQs & notifications | IRQ bind, notification signal, … |
-| Debug | Optional; stripped in release |
+| # | Constant | Args (`x0`–`x5`) | `x0` return |
+|---|----------|------------------|-------------|
+| 0 | `SYS_WRITE` | `fd`, `buf`, `len` | bytes written; errors are negative errno |
+| 1 | `SYS_READ` | (reserved) | `ENOSYS` |
+| 2 | `SYS_YIELD` | — | `0` |
+| 3 | `SYS_GETPID` | — | current task id |
+| 4 | `SYS_EXIT` | `code` | does not return |
+| 5 | `SYS_SLEEP` | `ms` | `0` |
+| 6 | `SYS_ENDPOINT_CREATE` | — | endpoint id; table full → `ENOMEM` |
+| 7 | `SYS_ENDPOINT_DESTROY` | `id` | `0` on success; `EINVAL` / `ENOENT` / `EPERM` |
+| 8 | `SYS_ENDPOINT_CALL` | `id`, `msg` (MVP: low **32** bits) | success: **32**-bit reply; not ready → **`EAGAIN` (-11)** |
+| 9 | `SYS_ENDPOINT_RECV` | `id` | success: `(client_id << 32) \| request` (each **32** bits); no message → **`EAGAIN` (-11)** |
+| 10 | `SYS_ENDPOINT_REPLY` | `id`, `client_id`, `msg` (MVP: low **32** bits) | `0` on success |
 
-When ABI freezes, fill this section and generate `syscall_abi` constants.
+Numbers may still change before freeze; track [TODO.md](./TODO.md) and the issue plan.
 
 ---
 
