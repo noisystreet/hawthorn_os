@@ -17,9 +17,17 @@ pub struct TaskView {
     pub priority: u8,
 }
 
-pub fn pick_next_index(tasks: &[TaskView], current: usize) -> usize {
-    let current_running = tasks[current].state == SchedState::Running;
-    let current_prio = tasks[current].priority;
+/// Choose the next runnable task index.
+///
+/// `current_time_slice` is the running task's remaining slice (from the TCB). When it hits
+/// zero, another **Ready** task at the **same** priority is chosen in round-robin order (cyclic
+/// scan starting at `current + 1`). Lower `priority` values mean higher importance.
+pub fn pick_next_index(tasks: &[TaskView], current: usize, current_time_slice: u64) -> usize {
+    let Some(ct) = tasks.get(current) else {
+        return 0;
+    };
+    let current_running = ct.state == SchedState::Running;
+    let current_prio = ct.priority;
 
     let mut best_idx: Option<usize> = None;
     let mut best_prio: u8 = u8::MAX;
@@ -30,11 +38,47 @@ pub fn pick_next_index(tasks: &[TaskView], current: usize) -> usize {
         }
     }
 
-    match best_idx {
-        Some(_) if current_running && current_prio <= best_prio => current,
-        Some(idx) => idx,
-        None => 0,
+    let Some(b_idx) = best_idx else {
+        return 0;
+    };
+
+    if !current_running {
+        return b_idx;
     }
+
+    if current_prio < best_prio {
+        return current;
+    }
+    if current_prio > best_prio {
+        return b_idx;
+    }
+
+    // Same priority as the best Ready contender.
+    if current_time_slice > 0 {
+        return current;
+    }
+
+    if let Some(rr) = pick_rr_same_prio_after(tasks, current, best_prio) {
+        return rr;
+    }
+
+    current
+}
+
+/// Next Ready task at `prio` after `current` in cyclic index order (`current` is skipped).
+fn pick_rr_same_prio_after(tasks: &[TaskView], current: usize, prio: u8) -> Option<usize> {
+    let n = tasks.len();
+    if n == 0 {
+        return None;
+    }
+    for step in 1..=n {
+        let i = (current + step) % n;
+        let t = tasks.get(i)?;
+        if t.state == SchedState::Ready && t.priority == prio {
+            return Some(i);
+        }
+    }
+    None
 }
 
 /// Per-task fields touched by the timer IRQ path (`task::tick`).
@@ -108,7 +152,7 @@ mod tests {
             t(SchedState::Ready, 20),
             t(SchedState::Running, 5),
         ];
-        assert_eq!(pick_next_index(&tasks, 3), 3);
+        assert_eq!(pick_next_index(&tasks, 3, 5), 3);
     }
 
     #[test]
@@ -119,7 +163,7 @@ mod tests {
             t(SchedState::Ready, 10),
             t(SchedState::Running, 20),
         ];
-        assert_eq!(pick_next_index(&tasks, 3), 1);
+        assert_eq!(pick_next_index(&tasks, 3, 5), 1);
     }
 
     #[test]
@@ -130,7 +174,54 @@ mod tests {
             t(SchedState::Exited, 10),
             t(SchedState::Unused, 20),
         ];
-        assert_eq!(pick_next_index(&tasks, 2), 0);
+        assert_eq!(pick_next_index(&tasks, 2, 5), 0);
+    }
+
+    #[test]
+    fn same_priority_keeps_current_while_time_slice_positive() {
+        let tasks = [
+            t(SchedState::Running, 255),
+            t(SchedState::Running, 10),
+            t(SchedState::Ready, 10),
+        ];
+        assert_eq!(pick_next_index(&tasks, 1, 3), 1);
+    }
+
+    #[test]
+    fn same_priority_round_robins_when_time_slice_zero() {
+        let s1 = [
+            t(SchedState::Running, 255),
+            t(SchedState::Running, 10),
+            t(SchedState::Ready, 10),
+            t(SchedState::Ready, 10),
+        ];
+        assert_eq!(pick_next_index(&s1, 1, 0), 2);
+
+        let s2 = [
+            t(SchedState::Running, 255),
+            t(SchedState::Ready, 10),
+            t(SchedState::Running, 10),
+            t(SchedState::Ready, 10),
+        ];
+        assert_eq!(pick_next_index(&s2, 2, 0), 3);
+
+        let s3 = [
+            t(SchedState::Running, 255),
+            t(SchedState::Ready, 10),
+            t(SchedState::Ready, 10),
+            t(SchedState::Running, 10),
+        ];
+        assert_eq!(pick_next_index(&s3, 3, 0), 1);
+    }
+
+    #[test]
+    fn exhausted_slice_stays_current_if_no_peer_at_same_priority() {
+        let tasks = [
+            t(SchedState::Running, 255),
+            t(SchedState::Running, 10),
+            t(SchedState::Ready, 20),
+        ];
+        assert_eq!(pick_next_index(&tasks, 1, 0), 1);
     }
 
     #[test]

@@ -498,7 +498,7 @@ unsafe fn pick_next_task() -> usize {
             priority: TASK_TABLE[i].priority,
         };
     }
-    pick_next_index(&view, CURRENT_TASK)
+    pick_next_index(&view, CURRENT_TASK, TASK_TABLE[CURRENT_TASK].time_slice)
 }
 
 fn task_state_to_sched(s: TaskState) -> SchedState {

@@ -6,7 +6,7 @@
 
 ---
 
-## 当前已实现模块概览（M1–M3）
+## 当前已实现模块概览（M1–M4）
 
 | 模块 | 文件 | 功能 |
 |------|------|------|
@@ -16,7 +16,7 @@
 | GICv3 | `gic.rs` | Distributor / Redistributor / CPU Interface 初始化，`ack()` / `eoi()` |
 | IRQ 分发 | `irq.rs` | 1020 槽 handler 表，`register()` / `dispatch()` |
 | 定时器 | `timer.rs` | ARM Generic Timer (PPI 30)，周期 tick，频率自 `CNTFRQ_EL0` |
-| 任务调度 | `task.rs` | 协作式调度 MVP：TCB / `create()` / `yield_now()` / `context_switch` 汇编 / `task_exit` |
+| 任务调度 | `task.rs` / `task_policy.rs` | FP 抢占 + 同优先级时间片轮转；`sleep` / `block` / `unblock`；TCB / `create()` / `yield_now()` / `context_switch` / `task_exit` |
 
 **启动序列**：`_start` (EL2→EL1) → `kernel_main`：BSS → UART → `trap::init()` → `gic::init()` → `irq::init()` → `timer::init()` → `task::init()` → 使能 IRQ → idle `yield_now()` 循环
 
@@ -55,16 +55,16 @@
 
 ## 调度与执行
 
-### 协作式调度（优先实现路径）
+### 协作式与抢占式调度（M3–M4）
 
 - [x] **线程 / 任务控制块（TCB）**：状态（就绪、运行、阻塞、退出）、优先级字段、内核栈指针。
-- [x] **就绪队列**：同优先级 FIFO 或多队列；`schedule()` / `yield()` 入口。
-- [ ] **自愿阻塞原语**：与 IPC 或 `wait_timeout` 对接的最小阻塞队列。
+- [x] **就绪队列**：按优先级选取就绪任务；`schedule()` / `yield_now()` 入口。
+- [x] **阻塞原语（MVP）**：`sleep` / `block` / `unblock`；与 IPC 深度整合的等待队列仍可增强。
 
 ### 抢占与时间
 
 - [ ] **可抢占标志**：临界区屏蔽（关抢占或关中断粒度文档）。
-- [ ] **时间片**：固定量子或可配置；与定时器中断挂钩。
+- [x] **时间片**：固定量子（`task.rs` 默认片长 + `task::tick`）；与定时器中断挂钩；同优先级轮转（`task_policy::pick_next_index`）。
 - [ ] **Tickless**：空闲时无周期 tick；唤醒依赖定时器单次触发（可先文档后实现）。
 
 ### SMP（多核）
@@ -76,7 +76,8 @@
 
 ### 睡眠与定时
 
-- [ ] **相对超时**：插入按到期时间排序的内核定时器队列（单链表或小根堆）。
+- [x] **相对超时（MVP）**：按全局 tick 计数唤醒睡眠任务（`wake_tick` 全表扫描；可改为有序队列）。
+- [ ] **有序定时器队列**：插入按到期时间排序（单链表或小根堆），降低 tick 路径开销。
 - [ ] **绝对时钟**：单调时钟 vs 墙钟策略（文档）；读 **CNTVCT_EL0** 或板级定时器。
 - [ ] **与 IPC 结合**：`recv` 带超时、`sleep` 系统调用草案。
 

@@ -6,7 +6,7 @@ This page lists **new runtime features and capabilities** planned for the repo. 
 
 ---
 
-## Current implemented modules (M1–M3)
+## Current implemented modules (M1–M4)
 
 | Module | File | Functionality |
 |--------|------|---------------|
@@ -16,7 +16,7 @@ This page lists **new runtime features and capabilities** planned for the repo. 
 | GICv3 | `gic.rs` | Distributor / Redistributor / CPU Interface init, `ack()` / `eoi()` |
 | IRQ dispatch | `irq.rs` | 1020-slot handler table, `register()` / `dispatch()` |
 | Timer | `timer.rs` | ARM Generic Timer (PPI 30), periodic tick, frequency from `CNTFRQ_EL0` |
-| Task scheduler | `task.rs` | Cooperative scheduler MVP: TCB / `create()` / `yield_now()` / `context_switch` asm / `task_exit` |
+| Task scheduler | `task.rs` / `task_policy.rs` | FP preemptive + same-priority time-slice RR; `sleep` / `block` / `unblock`; TCB / `create()` / `yield_now()` / `context_switch` / `task_exit` |
 
 **Boot sequence**: `_start` (EL2→EL1) → `kernel_main`: BSS → UART → `trap::init()` → `gic::init()` → `irq::init()` → `timer::init()` → `task::init()` → enable IRQ → idle `yield_now()` loop
 
@@ -55,16 +55,16 @@ This page lists **new runtime features and capabilities** planned for the repo. 
 
 ## Scheduling and execution
 
-### Cooperative scheduling (preferred first path)
+### Cooperative and preemptive scheduling (M3–M4)
 
 - [x] **TCB**: states (ready, running, blocked, exited), priority field, kernel stack pointer.
-- [x] **Ready queues**: FIFO within priority or multiple queues; `schedule()` / `yield()` entry points.
-- [ ] **Voluntary block**: minimal wait queue wired to IPC or `wait_timeout`.
+- [x] **Ready selection**: pick highest-priority ready task; `schedule()` / `yield_now()` entry points.
+- [x] **Blocking primitives (MVP)**: `sleep` / `block` / `unblock`; deeper wait queues for IPC can still be improved.
 
 ### Preemption and time
 
 - [ ] **Preempt disable flag**: critical sections (preemption vs interrupt masking — document granularity).
-- [ ] **Time slices**: fixed quantum or configurable; tie to timer IRQ.
+- [x] **Time slices**: fixed quantum (`task.rs` default) + `task::tick`; tied to timer IRQ; same-priority RR (`task_policy::pick_next_index`).
 - [ ] **Tickless**: no periodic tick when idle; wakeups from one-shot timers (doc first, code later).
 
 ### SMP
@@ -76,7 +76,8 @@ This page lists **new runtime features and capabilities** planned for the repo. 
 
 ### Sleep and timers
 
-- [ ] **Relative timeouts**: kernel timer queue sorted by expiry (linked list or min-heap).
+- [x] **Relative timeouts (MVP)**: wake sleepers by global tick count (`wake_tick` full-table scan; may become an ordered queue).
+- [ ] **Ordered timer queue**: expiry-sorted structure (linked list or min-heap) to reduce tick-path work.
 - [ ] **Wall vs monotonic** clock policy (docs); read **CNTVCT_EL0** or board timer.
 - [ ] **IPC integration**: `recv` with timeout, `sleep` syscall draft.
 

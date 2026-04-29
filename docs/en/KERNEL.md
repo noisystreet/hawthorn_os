@@ -98,7 +98,7 @@ Suggested minimal object types (names may vary):
 - **Migration (SMP):** document **worst-case migration** and lock hold time for pinned vs global queues.  
 - **IPC interaction:** blocking recv → **blocked**; non-blocking send / timeouts coordinated with IPC.
 
-**Current implementation (M3):** `task.rs` implements a **cooperative scheduler MVP** — `yield_now()` explicitly yields the CPU, no preemption. TCB has 5 states (Unused / Ready / Running / Blocked / Exited), `TaskContext` saves callee-saved registers (x19–x30), `context_switch` asm uses x2 as SP intermediate (AArch64 disallows `str sp`). New tasks enter via `task_trampoline`; if the entry returns, `task_exit` is invoked. Next step: M4 will add time-slice preemption and blocking primitives.
+**Current implementation (M4):** `task.rs` is a **fixed-priority preemptive** scheduler: the ARM Generic Timer tick (`timer.rs`) calls `task::tick()` to decrement the current task’s time slice; when it reaches zero, `NEED_RESCHEDULE` is set and `schedule()` runs on the IRQ return path in `trap`. **Equal priority** tasks **round-robin** by task index when the slice expires. `yield_now()` still voluntarily yields. Blocking primitives include **`sleep(ms)`** (wake by tick count) and **`block` / `unblock`** (for IPC and similar). The TCB has 5 states (Unused / Ready / Running / Blocked / Exited); `TaskContext` saves callee-saved registers (x19–x30) and **DAIF**; `context_switch` uses x2 as SP intermediate (AArch64 disallows `str sp`). Kernel tasks enter via `task_trampoline`; EL0 user tasks via `user_task_trampoline`; return paths go through `task_exit`. Policy helpers live in `task_policy.rs` under `#[cfg(test)]`-friendly slices.
 
 ### 3.4 IPC (`ipc`)
 

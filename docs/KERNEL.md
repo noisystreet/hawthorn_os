@@ -98,7 +98,7 @@ Bootloader / **TF-A** 移交的 **异常级（EL）**、入口 PC、设备树指
 - **迁移（SMP 预留）**：线程绑定 CPU 或 **全局队列** 策略二选一时，文档化 **最坏迁移开销** 与锁持有时间。
 - **与 IPC 关系**：阻塞式接收导致 **阻塞态**；发送非阻塞或带超时由 IPC 层与调度协同。
 
-**当前实现（M3）**：`task.rs` 实现了 **协作式调度 MVP**——`yield_now()` 显式让出 CPU，无抢占。TCB 含 5 种状态（Unused / Ready / Running / Blocked / Exited），`TaskContext` 保存 callee-saved 寄存器（x19–x30），`context_switch` 汇编用 x2 中转 SP（AArch64 不允许 `str sp`）。任务通过 `task_trampoline` 入口启动，返回后跳 `task_exit`。下一步：M4 将加入时间片抢占和阻塞原语。
+**当前实现（M4）**：`task.rs` 为 **固定优先级抢占式调度**：ARM Generic Timer tick（`timer.rs`）调用 `task::tick()` 递减当前任务时间片，耗尽时置 `NEED_RESCHEDULE`，在 `trap` 的 IRQ 返回路径上调用 `schedule()`；**同优先级**在时间片耗尽时按任务下标 **轮转**。`yield_now()` 仍可用于主动让出。阻塞原语包括 **`sleep(ms)`**（按 tick 唤醒）、**`block` / `unblock`**（供 IPC 等使用）。TCB 含 5 种状态（Unused / Ready / Running / Blocked / Exited），`TaskContext` 保存 callee-saved 寄存器（x19–x30）及 **DAIF**，`context_switch` 汇编用 x2 中转 SP（AArch64 不允许 `str sp`）。内核任务经 `task_trampoline` 启动；EL0 用户任务经 `user_task_trampoline`；返回后走 `task_exit`。调度策略的纯函数切片见 `task_policy.rs`（`#[cfg(test)]`）。
 
 ### 3.4 IPC 子系统（`ipc`）
 

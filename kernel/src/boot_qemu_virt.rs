@@ -181,7 +181,7 @@ pub extern "C" fn kernel_main() -> ! {
     crate::irq::init();
     // Initialize ARM Generic Timer (must follow IRQ init; registers PPI 30 handler).
     crate::timer::init();
-    // Initialize cooperative task scheduler.
+    // Initialize preemptive FP scheduler (time-slice + same-priority RR).
     crate::task::init();
     // Initialize endpoint table (IPC MVP step 1 lifecycle only).
     crate::endpoint::init();
