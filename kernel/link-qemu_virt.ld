@@ -28,6 +28,14 @@ SECTIONS {
     __bss_end = .;
   } > RAM
 
+  /* User program embedded in kernel image (for testing EL0 execution) */
+  .user_program : {
+    __user_program_start = .;
+    KEEP(*(.user_program))
+    . = ALIGN(4096);
+    __user_program_end = .;
+  } > RAM
+
   /* End of kernel image in RAM; frame allocator starts after this. */
   . = ALIGN(4096);
   __kernel_end = .;

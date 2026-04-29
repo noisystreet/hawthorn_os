@@ -16,7 +16,31 @@ const PL011_CR: usize = PL011_BASE + 0x30;
 extern "C" {
     static __bss_start: u8;
     static __bss_end: u8;
+    static __user_program_start: u8;
+    static __user_program_end: u8;
 }
+
+/// Simple user program that prints "hello from EL0!" via syscall and exits.
+/// This is embedded in the .user_program section and mapped into user address space.
+#[link_section = ".user_program"]
+#[no_mangle]
+#[used]
+static USER_PROGRAM: [u8; 52] = [
+    // mov x8, #0          // SYS_write syscall number
+    0x80, 0x00, 0x80, 0xd2, // mov x0, #1          // fd = stdout
+    0x20, 0x00, 0x80, 0xd2,
+    // adr x1, msg         // pointer to embedded message (PC-relative)
+    0xe1, 0x00, 0x00, 0x10, // mov x2, #16         // length
+    0x02, 0x02, 0x80, 0xd2, // svc #0              // syscall
+    0x01, 0x00, 0x00, 0xd4, // mov x8, #1          // SYS_exit
+    0x88, 0x00, 0x80, 0xd2, // mov x0, #0          // exit code 0
+    0x00, 0x00, 0x80, 0xd2, // svc #0              // syscall
+    0x01, 0x00, 0x00, 0xd4,
+    // b .                 // loop forever (should not reach here)
+    0x00, 0x00, 0x00, 0x14, // msg: .ascii "hello from EL0!\n"
+    b'h', b'e', b'l', b'l', b'o', b' ', b'f', b'r', b'o', b'm', b' ', b'E', b'L', b'0', b'!',
+    b'\n',
+];
 
 /// Write a 32-bit value to a MMIO address.
 ///
@@ -142,6 +166,15 @@ pub extern "C" fn kernel_main() -> ! {
     crate::mm::enable_mmu_step4();
     // Step 5: Enable SCTLR.M and verify
     crate::mm::enable_mmu_step5();
+    // Test MMIO access with MMU enabled - PL011 UART
+    crate::println!("[test] Testing PL011 UART access with MMU enabled...");
+    // SAFETY: PL011 base is identity mapped.
+    unsafe {
+        let pl011_base = 0x0900_0000 as *mut u32;
+        let dr = pl011_base.read_volatile(); // Read data register
+        crate::println!("[test] PL011 DR read OK: {:#x}", dr);
+    }
+    crate::println!("[test] PL011 UART access OK, now testing GIC...");
     // SAFETY: GICv3 MMIO base addresses are fixed on QEMU `virt`.
     unsafe { crate::gic::init() };
     // Initialize IRQ dispatch table (must follow GIC init).
@@ -206,6 +239,24 @@ pub extern "C" fn kernel_main() -> ! {
     crate::task::create(task_b, 1);
     crate::task::create(task_d, 1);
     crate::println!("[task] created tasks A, B, D (syscall test)");
+
+    // Create EL0 user task: code at 0x1000, stack top at 0x8000.
+    match crate::task::create_user(0x1000, 0x8000) {
+        Some(id) => {
+            let user_prog_start = unsafe { &__user_program_start as *const _ as usize };
+            let user_prog_end = unsafe { &__user_program_end as *const _ as usize };
+            crate::println!(
+                "[user] created user task {:?}, image {:#x}-{:#x}",
+                id,
+                user_prog_start,
+                user_prog_end
+            );
+        }
+        None => {
+            crate::println!("[user] failed to create user task");
+        }
+    }
+
     // Enable IRQ exceptions at EL1 (clear DAIF.I bit).
     unsafe { asm!("msr daifclr, #2") };
     // SAFETY: UART initialized above.

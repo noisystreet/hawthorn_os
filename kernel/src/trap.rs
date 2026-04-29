@@ -387,6 +387,83 @@ global_asm!(
     "eret",
 );
 
+// User task return path: restore EL0 state and eret to user mode
+// This is called from context_switch when switching to a user task
+global_asm!(
+    ".global user_return",
+    ".type user_return, @function",
+    ".align 4",
+    "user_return:",
+    // x0 = task struct pointer (from task table)
+    // Restore user state and eret to EL0
+
+    // Load saved_elr, saved_spsr, saved_sp_el0 from task struct
+    // Task struct layout (after sp at offset 0):
+    //   0: sp (u64)
+    //   8: state (u8) + padding
+    //   16: priority (u8) + id (u16) + padding
+    //   24: time_slice (u64)
+    //   32: daif (u64)
+    //   40: wake_tick (u64)
+    //   40: is_user (bool) + 7-byte padding
+    //   48: user_page_table (usize)
+    //   56: saved_elr (u64)
+    //   64: saved_spsr (u64)
+    //   72: saved_sp_el0 (u64)
+
+    // Load saved_elr
+    "ldr x1, [x0, #56]",
+    "msr elr_el1, x1",
+    // Load saved_spsr
+    "ldr x1, [x0, #64]",
+    "msr spsr_el1, x1",
+    // Load saved_sp_el0
+    "ldr x1, [x0, #72]",
+    "msr sp_el0, x1",
+    // Load user_page_table and switch TTBR0
+    "ldr x1, [x0, #48]",
+    "msr ttbr0_el1, x1",
+    "isb",
+    "tlbi vmalle1is",
+    "isb",
+    // Now we need to restore x0-x30 from the task's kernel stack
+    // The context was saved by context_switch
+    "ldr x1, [x0]", // Load sp (kernel stack pointer)
+    // Restore callee-saved registers from kernel stack
+    "ldp x19, x20, [x1], #16",
+    "ldp x21, x22, [x1], #16",
+    "ldp x23, x24, [x1], #16",
+    "ldp x25, x26, [x1], #16",
+    "ldp x27, x28, [x1], #16",
+    "ldp x29, x30, [x1], #16",
+    // Restore caller-saved registers (x0-x18) from trap frame
+    // For initial entry, we set x0-x18 to 0
+    // For syscall return, they were saved in trap frame
+
+    // Clear x0-x18 for initial entry
+    "mov x0, #0",
+    "mov x1, #0",
+    "mov x2, #0",
+    "mov x3, #0",
+    "mov x4, #0",
+    "mov x5, #0",
+    "mov x6, #0",
+    "mov x7, #0",
+    "mov x8, #0",
+    "mov x9, #0",
+    "mov x10, #0",
+    "mov x11, #0",
+    "mov x12, #0",
+    "mov x13, #0",
+    "mov x14, #0",
+    "mov x15, #0",
+    "mov x16, #0",
+    "mov x17, #0",
+    "mov x18, #0",
+    // Eret to EL0
+    "eret",
+);
+
 fn read_esr() -> u64 {
     let esr: u64;
     // SAFETY: reading a system register has no side effects.
@@ -452,8 +529,11 @@ unsafe extern "C" fn handle_exception(
         }
     };
 
+    // Check if current task is a user task (for EL0 exceptions)
+    let is_user = crate::task::current_is_user();
+
     match kind {
-        Ok(ExceptionKind::El1IrqSpx) | Ok(ExceptionKind::El0IrqA64) => {
+        Ok(ExceptionKind::El1IrqSpx) => {
             crate::irq::dispatch();
 
             if crate::task::need_reschedule() {
@@ -461,7 +541,28 @@ unsafe extern "C" fn handle_exception(
                 crate::task::schedule();
             }
         }
+        Ok(ExceptionKind::El0IrqA64) => {
+            // Save user state before handling IRQ
+            if is_user {
+                crate::task::set_current_saved_context(elr, spsr, read_sp_el0());
+            }
+
+            crate::irq::dispatch();
+
+            if crate::task::need_reschedule() {
+                crate::task::clear_need_reschedule();
+                crate::task::schedule();
+            }
+            if crate::task::current_is_user() {
+                restore_el0_return_context_from_current_task();
+            }
+        }
         Ok(ExceptionKind::El0SyncA64) => {
+            // Save user state before handling syscall
+            if is_user {
+                crate::task::set_current_saved_context(elr, spsr, read_sp_el0());
+            }
+
             let esr = read_esr();
             let ec = (esr >> 26) & 0x3F;
             if ec == 0x15 {
@@ -478,6 +579,9 @@ unsafe extern "C" fn handle_exception(
 
                 unsafe {
                     (*trap_frame).x[0] = ret;
+                }
+                if crate::task::current_is_user() {
+                    restore_el0_return_context_from_current_task();
                 }
             } else {
                 dump_exception(kind.unwrap(), elr, spsr);
@@ -520,6 +624,24 @@ unsafe extern "C" fn handle_exception(
         _ => loop {
             core::hint::spin_loop();
         },
+    }
+}
+
+fn read_sp_el0() -> u64 {
+    let sp: u64;
+    unsafe { asm!("mrs {}, sp_el0", out(reg) sp) };
+    sp
+}
+
+fn restore_el0_return_context_from_current_task() {
+    let elr = crate::task::current_saved_elr();
+    let spsr = crate::task::current_saved_spsr();
+    let sp_el0 = crate::task::current_saved_sp_el0();
+    unsafe {
+        asm!("msr elr_el1, {}", in(reg) elr, options(nostack, preserves_flags));
+        asm!("msr spsr_el1, {}", in(reg) spsr, options(nostack, preserves_flags));
+        asm!("msr sp_el0, {}", in(reg) sp_el0, options(nostack, preserves_flags));
+        asm!("isb", options(nostack, preserves_flags));
     }
 }
 

@@ -23,6 +23,11 @@ use core::arch::asm;
 use core::arch::global_asm;
 use core::mem::size_of;
 
+extern "C" {
+    static __user_program_start: u8;
+    static __user_program_end: u8;
+}
+
 const MAX_TASKS: usize = 8;
 
 const STACK_SIZE: usize = 4096;
@@ -39,7 +44,7 @@ pub enum TaskState {
     Exited = 4,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(transparent)]
 pub struct TaskId(pub u16);
 
@@ -59,14 +64,25 @@ struct TaskContext {
     lr: u64,
 }
 
-struct Task {
-    sp: u64,
-    state: TaskState,
-    priority: u8,
-    id: TaskId,
-    time_slice: u64,
-    daif: u64,
-    wake_tick: u64,
+/// Task Control Block (TCB)
+///
+/// This structure is accessed from assembly code in trap.rs.
+/// Do not change field order without updating the assembly offsets.
+#[repr(C)]
+pub struct Task {
+    pub sp: u64,
+    pub state: TaskState,
+    pub priority: u8,
+    pub id: TaskId,
+    pub time_slice: u64,
+    pub daif: u64,
+    pub wake_tick: u64,
+    // User task fields (only valid when is_user is true)
+    pub is_user: bool,
+    pub user_page_table: usize,
+    pub saved_elr: u64,
+    pub saved_spsr: u64,
+    pub saved_sp_el0: u64,
 }
 
 impl Task {
@@ -78,6 +94,11 @@ impl Task {
         time_slice: 0,
         daif: 0,
         wake_tick: 0,
+        is_user: false,
+        user_page_table: 0,
+        saved_elr: 0,
+        saved_spsr: 0,
+        saved_sp_el0: 0,
     };
 }
 
@@ -126,6 +147,8 @@ global_asm!(
 extern "C" {
     fn context_switch(old_sp: *mut u64, new_sp: *const u64);
     fn task_trampoline();
+    #[allow(dead_code)]
+    fn user_return(task_ptr: *mut Task);
 }
 
 #[no_mangle]
@@ -150,6 +173,11 @@ pub fn init() {
             time_slice: DEFAULT_TIME_SLICE,
             daif: 0,
             wake_tick: 0,
+            is_user: false,
+            user_page_table: 0,
+            saved_elr: 0,
+            saved_spsr: 0,
+            saved_sp_el0: 0,
         };
         CURRENT_TASK = 0;
         NEED_RESCHEDULE = false;
@@ -185,10 +213,176 @@ pub fn create(entry: extern "C" fn(), priority: u8) -> Option<TaskId> {
             time_slice: DEFAULT_TIME_SLICE,
             daif: 0,
             wake_tick: 0,
+            is_user: false,
+            user_page_table: 0,
+            saved_elr: 0,
+            saved_spsr: 0,
+            saved_sp_el0: 0,
         };
 
         Some(TaskId(idx as u16))
     }
+}
+
+/// Create a new EL0 user task.
+///
+/// # Arguments
+/// - `entry`: User program entry virtual address
+/// - `stack_top`: User stack top virtual address
+///
+/// # Returns
+/// - `Some(TaskId)`: Success
+/// - `None`: Task table full or out of memory
+pub fn create_user(entry: usize, stack_top: usize) -> Option<TaskId> {
+    unsafe {
+        // Find a free task slot
+        let mut idx = None;
+        for i in 1..MAX_TASKS {
+            if TASK_TABLE[i].state == TaskState::Unused {
+                idx = Some(i);
+                break;
+            }
+        }
+        let idx = idx?;
+
+        // Allocate kernel stack for the task (for syscall/trap handling)
+        let stack_base = core::ptr::addr_of!(TASK_STACKS) as u64;
+        let kernel_stack_top = stack_base + ((idx + 1) * STACK_SIZE) as u64;
+        let kernel_stack_top = kernel_stack_top & !0xFu64;
+
+        // Create initial context (will be used on first schedule)
+        // The context will be restored by context_switch, which then returns
+        // to task_trampoline -> entry function
+        let ctx_ptr = (kernel_stack_top - size_of::<TaskContext>() as u64) as *mut TaskContext;
+        core::ptr::write_bytes(ctx_ptr, 0, 1);
+
+        // For user tasks, we use a special trampoline that sets up EL0 state
+        (*ctx_ptr).lr = user_task_trampoline as *const () as usize as u64;
+        (*ctx_ptr).x19 = entry as u64;
+
+        // Create user page table with kernel mappings cloned
+        let user_pt = crate::mm::create_user_page_table()?;
+
+        // Map user code pages (copy embedded .user_program into user frames).
+        let user_prog_start = core::ptr::addr_of!(__user_program_start) as usize;
+        let user_prog_end = core::ptr::addr_of!(__user_program_end) as usize;
+        let user_prog_size = user_prog_end.saturating_sub(user_prog_start);
+        let pages_needed = (user_prog_size + 4095) / 4096;
+        for i in 0..pages_needed {
+            let src_paddr = user_prog_start + i * 4096;
+            let dst_vaddr = entry + i * 4096;
+            let frame = crate::frame_alloc::alloc_frame()?;
+            core::ptr::copy_nonoverlapping(src_paddr as *const u8, frame as *mut u8, 4096);
+            if !crate::mm::map_user_page(
+                user_pt,
+                dst_vaddr,
+                frame,
+                crate::mm::PTE_AP_RW_ALL | crate::mm::ATTR_NORMAL,
+            ) {
+                return None;
+            }
+        }
+
+        // Map user stack (4K stack page)
+        let user_stack_bottom = stack_top - STACK_SIZE;
+        let stack_frame = crate::frame_alloc::alloc_frame()?;
+        if !crate::mm::map_user_page(
+            user_pt,
+            user_stack_bottom,
+            stack_frame,
+            crate::mm::PTE_AP_RW_ALL | crate::mm::ATTR_NORMAL | crate::mm::PTE_UXN,
+        ) {
+            return None;
+        }
+
+        TASK_TABLE[idx] = Task {
+            sp: ctx_ptr as u64,
+            state: TaskState::Ready,
+            priority: 128, // User tasks default to middle priority
+            id: TaskId(idx as u16),
+            time_slice: DEFAULT_TIME_SLICE,
+            daif: 0,
+            wake_tick: 0,
+            is_user: true,
+            user_page_table: user_pt,
+            saved_elr: entry as u64,
+            // Initial EL0 entry state:
+            // - M[3:0]=0b0000 (EL0t)
+            // - NZCV/DAIF cleared as baseline for a fresh user task
+            // Subsequent returns from exceptions must restore the saved SPSR value.
+            saved_spsr: 0x0000_0000,
+            saved_sp_el0: stack_top as u64,
+        };
+
+        Some(TaskId(idx as u16))
+    }
+}
+
+pub fn exit_current() -> ! {
+    unsafe {
+        TASK_TABLE[CURRENT_TASK].state = TaskState::Exited;
+        NEED_RESCHEDULE = true;
+        schedule();
+    }
+    loop {
+        core::hint::spin_loop();
+    }
+}
+
+/// Check if current task is a user task.
+pub fn current_is_user() -> bool {
+    unsafe { TASK_TABLE[CURRENT_TASK].is_user }
+}
+
+/// Get current task's user page table (TTBR0_EL1 value).
+pub fn current_user_page_table() -> usize {
+    unsafe { TASK_TABLE[CURRENT_TASK].user_page_table }
+}
+
+/// Get current task's saved ELR_EL1 (for user return).
+pub fn current_saved_elr() -> u64 {
+    unsafe { TASK_TABLE[CURRENT_TASK].saved_elr }
+}
+
+/// Get current task's saved SPSR_EL1 (for user return).
+pub fn current_saved_spsr() -> u64 {
+    unsafe { TASK_TABLE[CURRENT_TASK].saved_spsr }
+}
+
+/// Get current task's saved SP_EL0 (for user return).
+pub fn current_saved_sp_el0() -> u64 {
+    unsafe { TASK_TABLE[CURRENT_TASK].saved_sp_el0 }
+}
+
+/// Set current task's saved registers after syscall/trap.
+pub fn set_current_saved_context(elr: u64, spsr: u64, sp_el0: u64) {
+    unsafe {
+        let idx = CURRENT_TASK;
+        TASK_TABLE[idx].saved_elr = elr;
+        TASK_TABLE[idx].saved_spsr = spsr;
+        TASK_TABLE[idx].saved_sp_el0 = sp_el0;
+    }
+}
+
+extern "C" {
+    fn user_task_trampoline();
+}
+
+global_asm!(
+    ".global user_task_trampoline",
+    ".type user_task_trampoline, @function",
+    ".align 4",
+    "user_task_trampoline:",
+    // Enter EL0 through trap.rs:user_return (sets ELR/SPSR/SP_EL0/TTBR0 then eret).
+    "bl task_current_ptr",
+    "bl user_return",
+    // If user_return unexpectedly returns, terminate this task.
+    "b task_exit",
+);
+
+#[no_mangle]
+extern "C" fn task_current_ptr() -> *mut Task {
+    unsafe { &mut TASK_TABLE[CURRENT_TASK] as *mut Task }
 }
 
 pub fn current_id() -> TaskId {
@@ -239,6 +433,8 @@ pub fn schedule() {
         asm!("mrs {}, daif", out(reg) daif);
         TASK_TABLE[current].daif = daif;
 
+        // Always switch via context_switch so the current task's kernel stack pointer
+        // is saved in TASK_TABLE[current].sp before any user-mode transition.
         context_switch(&mut TASK_TABLE[current].sp, &TASK_TABLE[next].sp);
 
         asm!("msr daif, {}", in(reg) TASK_TABLE[CURRENT_TASK].daif);

@@ -21,30 +21,32 @@ const BLOCK_SIZE: usize = 2 * 1024 * 1024;
 
 const ENTRIES_PER_TABLE: usize = 512;
 
-const PTE_VALID: u64 = 1 << 0;
-const PTE_TABLE: u64 = 1 << 1;
-const PTE_BLOCK: u64 = 0 << 1;
-const PTE_PAGE: u64 = 1 << 1;
-const PTE_AF: u64 = 1 << 10;
+pub const PTE_VALID: u64 = 1 << 0;
+pub const PTE_TABLE: u64 = 1 << 1;
+pub const PTE_BLOCK: u64 = 0 << 1;
+pub const PTE_PAGE: u64 = 1 << 1;
+pub const PTE_AF: u64 = 1 << 10;
 #[allow(dead_code)]
-const PTE_AP_RO: u64 = 0b11 << 6;
+pub const PTE_AP_RO: u64 = 0b11 << 6;
 /// EL1 read/write, EL0 no access (same as `DESC_AP_RW_EL1` in aarch64_kernel `bits.rs`).
-const PTE_AP_RW_EL1: u64 = 0b00 << 6;
+pub const PTE_AP_RW_EL1: u64 = 0b00 << 6;
 /// EL1 + EL0 read/write (user pages).
 #[allow(dead_code)]
-const PTE_AP_RW_ALL: u64 = 0b01 << 6;
+pub const PTE_AP_RW_ALL: u64 = 0b01 << 6;
 /// Inner Shareable (descriptor bits [9:8]); complements MAIR for Normal memory.
-const PTE_SH_IS: u64 = 0b11 << 8;
+pub const PTE_SH_IS: u64 = 0b11 << 8;
+/// Non-Shareable (descriptor bits [9:8]); use for Device memory.
+pub const PTE_SH_NONE: u64 = 0b00 << 8;
 /// Unprivileged execute-never (set on kernel RAM / MMIO like aarch64_kernel).
-const PTE_UXN: u64 = 1 << 54;
-const PTE_PXN: u64 = 1 << 53;
+pub const PTE_UXN: u64 = 1 << 54;
+pub const PTE_PXN: u64 = 1 << 53;
 
 /// Table descriptor: subtree denies EL0 access; EL0 execute-never default (see aarch64_kernel).
-const TABLE_APTABLE0: u64 = 1 << 61;
-const TABLE_UXNTABLE: u64 = 1 << 60;
+pub const TABLE_APTABLE0: u64 = 1 << 61;
+pub const TABLE_UXNTABLE: u64 = 1 << 60;
 
-const ATTR_NORMAL: u64 = 0 << 2;
-const ATTR_DEVICE: u64 = 1 << 2;
+pub const ATTR_NORMAL: u64 = 0 << 2;
+pub const ATTR_DEVICE: u64 = 1 << 2;
 
 const RAM_START: usize = 0x4000_0000;
 #[allow(dead_code)]
@@ -132,7 +134,21 @@ fn make_table_desc(paddr: usize) -> u64 {
     ((paddr as u64 >> 12) << 12) | PTE_VALID | PTE_TABLE | TABLE_UXNTABLE | TABLE_APTABLE0
 }
 
+fn make_user_table_desc(paddr: usize) -> u64 {
+    // User table descriptors must not force APTable[0]=1, otherwise EL0 access to
+    // the entire subtree is denied regardless of leaf PTE permissions.
+    ((paddr as u64 >> 12) << 12) | PTE_VALID | PTE_TABLE
+}
+
 fn get_or_alloc_table(current_table: usize, idx: usize) -> Option<usize> {
+    get_or_alloc_table_with(current_table, idx, make_table_desc)
+}
+
+fn get_or_alloc_table_with(
+    current_table: usize,
+    idx: usize,
+    make_desc: fn(usize) -> u64,
+) -> Option<usize> {
     let entry_ptr = (current_table + idx * 8) as *mut u64;
     let entry = unsafe { *entry_ptr };
 
@@ -144,7 +160,7 @@ fn get_or_alloc_table(current_table: usize, idx: usize) -> Option<usize> {
         }
     } else {
         let new_frame = frame_alloc::alloc_zeroed_frame()?;
-        let new_entry = make_table_desc(new_frame);
+        let new_entry = make_desc(new_frame);
         unsafe {
             *entry_ptr = new_entry;
         }
@@ -247,12 +263,120 @@ pub fn clone_kernel_mappings(dst_table: usize) -> bool {
     for i in 0..ENTRIES_PER_TABLE {
         let entry = unsafe { *src_ptr.add(i) };
         if entry & PTE_VALID != 0 && entry & PTE_TABLE != 0 {
+            // User page-table roots must not inherit APTable[0]=1 / UXNTable=1 from
+            // kernel tables, otherwise EL0 data access or instruction fetch is denied
+            // for the entire subtree regardless of leaf PTE permissions.
+            let user_entry = entry & !(TABLE_APTABLE0 | TABLE_UXNTABLE);
             unsafe {
-                *dst_ptr.add(i) = entry;
+                *dst_ptr.add(i) = user_entry;
             }
         }
     }
 
+    true
+}
+
+/// Create a new user page table with kernel identity mappings cloned.
+///
+/// The user page table shares kernel L1 tables (via PGD[0] pointer) but can have
+/// independent L2/L3 mappings for user code/stack.
+pub fn create_user_page_table() -> Option<usize> {
+    let table = frame_alloc::alloc_zeroed_frame()?;
+
+    // Clone kernel mappings (PGD[0] → L1 tables)
+    // This gives user tasks access to kernel RAM and device mappings
+    // In a fully isolated system, we would use TTBR0/TTBR1 split instead
+    if !clone_kernel_mappings(table) {
+        return None;
+    }
+
+    Some(table)
+}
+
+/// Map a page in the specified page table (can be user or kernel).
+///
+/// # Safety
+/// Caller must ensure:
+/// - `table` is a valid page table root
+/// - `vaddr` and `paddr` are page-aligned (4K)
+/// - The mapping does not conflict with existing entries
+pub unsafe fn map_user_page(table: usize, vaddr: usize, paddr: usize, attr: u64) -> bool {
+    let idx0 = index_at(vaddr, 0);
+    let l0_entry_ptr = (table + idx0 * 8) as *mut u64;
+    let mut l0_entry = *l0_entry_ptr;
+    let l1 = if l0_entry & PTE_VALID != 0 && (l0_entry & PTE_TABLE) == PTE_TABLE {
+        l0_entry &= !(TABLE_APTABLE0 | TABLE_UXNTABLE);
+        *l0_entry_ptr = l0_entry;
+        entry_to_paddr(l0_entry)
+    } else if l0_entry == 0 {
+        let new_l1 = match frame_alloc::alloc_zeroed_frame() {
+            Some(f) => f,
+            None => return false,
+        };
+        *l0_entry_ptr = make_user_table_desc(new_l1);
+        new_l1
+    } else {
+        return false;
+    };
+
+    let idx1 = index_at(vaddr, 1);
+    let l1_entry_ptr = (l1 + idx1 * 8) as *mut u64;
+    let mut l1_entry = *l1_entry_ptr;
+    let l2 = if l1_entry & PTE_VALID != 0 && (l1_entry & PTE_TABLE) == PTE_TABLE {
+        l1_entry &= !(TABLE_APTABLE0 | TABLE_UXNTABLE);
+        *l1_entry_ptr = l1_entry;
+        entry_to_paddr(l1_entry)
+    } else if l1_entry == 0 {
+        let new_l2 = match frame_alloc::alloc_zeroed_frame() {
+            Some(f) => f,
+            None => return false,
+        };
+        *l1_entry_ptr = make_user_table_desc(new_l2);
+        new_l2
+    } else {
+        return false;
+    };
+
+    let idx2 = index_at(vaddr, 2);
+    let l2_entry_ptr = (l2 + idx2 * 8) as *mut u64;
+    let l2_entry = *l2_entry_ptr;
+    let l3 = if l2_entry & PTE_VALID != 0 && (l2_entry & PTE_TABLE) == PTE_TABLE {
+        let l2_table_entry = l2_entry & !(TABLE_APTABLE0 | TABLE_UXNTABLE);
+        *l2_entry_ptr = l2_table_entry;
+        entry_to_paddr(l2_table_entry)
+    } else if l2_entry & PTE_VALID != 0 {
+        // Split an existing 2 MiB block entry into a user-table L3 page table so a
+        // user mapping can override a specific 4 KiB page.
+        let new_l3 = match frame_alloc::alloc_zeroed_frame() {
+            Some(f) => f,
+            None => return false,
+        };
+        let block_base = ((l2_entry >> 21) << 21) as usize;
+        // Preserve relevant block attributes for the 511 untouched pages.
+        let common_attr = l2_entry
+            & (0xFFFu64 // AttrIdx/AP/SH/AF/nG and low control bits
+                | (1 << 51) // DBM
+                | (1 << 52) // Contiguous
+                | (1 << 53) // PXN
+                | (1 << 54)); // UXN
+        for i in 0..ENTRIES_PER_TABLE {
+            let pa = block_base + i * PAGE_SIZE;
+            let page_desc = ((pa as u64 >> 12) << 12) | common_attr | PTE_VALID | PTE_PAGE;
+            *((new_l3 + i * 8) as *mut u64) = page_desc;
+        }
+        *l2_entry_ptr = make_user_table_desc(new_l3);
+        new_l3
+    } else {
+        match get_or_alloc_table_with(l2, idx2, make_user_table_desc) {
+            Some(t) => t,
+            None => return false,
+        }
+    };
+
+    let idx3 = index_at(vaddr, 3);
+    let entry_ptr = (l3 + idx3 * 8) as *mut u64;
+    let pte = make_entry(paddr, PTE_VALID | PTE_PAGE | attr);
+    *entry_ptr = pte;
     true
 }
 
@@ -282,14 +406,46 @@ pub fn init() {
         ATTR_NORMAL | PTE_AP_RW_EL1 | PTE_SH_IS | PTE_UXN,
     );
 
-    // Device region at 0x00000000-0x40000000 (2 MiB blocks)
-    let dev_size = 0x4000_0000; // 1 GiB
+    // Device region at 0x00000000-0x08000000 (2 MiB blocks)
+    // Exclude 0x08000000-0x08200000 (GIC region, needs 4K pages)
+    let dev_size = 0x0800_0000; // 128 MiB
     map_range_2m(
         table,
         0x0000_0000,
         0x0000_0000,
         dev_size,
-        ATTR_DEVICE | PTE_AP_RW_EL1 | PTE_SH_IS | PTE_UXN | PTE_PXN,
+        ATTR_DEVICE | PTE_AP_RW_EL1 | PTE_SH_NONE | PTE_UXN | PTE_PXN,
+    );
+
+    // GIC region: 0x08000000-0x08200000 (2 MiB, use 4K pages for precise mapping)
+    // GICD: 0x08000000-0x08010000 (64 KiB)
+    // GICR RD base: 0x080A0000-0x080AFFFF (64 KiB)
+    // GICR SGI base: 0x080B0000-0x080BFFFF (64 KiB)
+    // Map the entire 2 MiB region with 4K pages to ensure proper alignment
+    crate::println!("[mm] mapping GIC region 0x08000000-0x08200000 with 4K pages...");
+    for i in 0..512 {
+        let vaddr = 0x0800_0000 + i * 4096;
+        let paddr = 0x0800_0000 + i * 4096;
+        if !map_page(
+            table,
+            vaddr,
+            paddr,
+            ATTR_DEVICE | PTE_AP_RW_EL1 | PTE_SH_NONE | PTE_UXN | PTE_PXN,
+        ) {
+            crate::println!("[mm] ERROR: failed to map page at {:#x}", vaddr);
+            break;
+        }
+    }
+    crate::println!("[mm] GIC region mapped");
+
+    // Device region at 0x08200000-0x40000000 (2 MiB blocks)
+    // PL011 is at 0x09000000
+    map_range_2m(
+        table,
+        0x0820_0000,
+        0x0820_0000,
+        0x4000_0000 - 0x0820_0000,
+        ATTR_DEVICE | PTE_AP_RW_EL1 | PTE_SH_NONE | PTE_UXN | PTE_PXN,
     );
 
     // Ordering + PoC: translation tables must be visible to the walker (DSB) and
@@ -360,6 +516,38 @@ pub fn dump_tables() {
             }
         }
 
+        // Dump L2[0] for devices (via L1[0]) - includes GIC
+        let l1_0 = unsafe { *((l1 + 0) as *const u64) };
+        if l1_0 & PTE_TABLE != 0 {
+            let l2 = entry_to_paddr(l1_0);
+            crate::println!("[mm/dump] L2 table (devices) at {:#x}:", l2);
+            // Show L2[64] which covers GIC region (0x0800_0000)
+            for i in [0, 64, 65, 72, 73] {
+                let entry = unsafe { *((l2 + i * 8) as *const u64) };
+                if entry != 0 {
+                    let typ = if entry & PTE_TABLE == PTE_TABLE {
+                        "Table"
+                    } else if entry & PTE_VALID != 0 && (entry & PTE_TABLE) == PTE_BLOCK {
+                        "Block"
+                    } else {
+                        "Unknown"
+                    };
+                    let paddr: usize = if entry & PTE_TABLE != 0 {
+                        entry_to_paddr(entry)
+                    } else {
+                        ((entry >> 21) << 21) as usize // For 2MiB block
+                    };
+                    crate::println!(
+                        "[mm/dump]   L2[{}] = {:#x} ({}, paddr={:#x})",
+                        i,
+                        entry,
+                        typ,
+                        paddr
+                    );
+                }
+            }
+        }
+
         // Dump L2[0] for RAM (via L1[1])
         let l1_1 = unsafe { *((l1 + 8) as *const u64) };
         if l1_1 & PTE_TABLE != 0 {
@@ -389,18 +577,48 @@ pub fn dump_tables() {
     }
 
     // Verify specific addresses
-    let test_addrs = [0x4000_0000usize, 0x4000_1000, 0x0900_0000];
+    let test_addrs = [0x4000_0000usize, 0x4000_1000, 0x0900_0000, 0x080a_0000];
     for addr in test_addrs {
         let idx0 = index_at(addr, 0);
         let idx1 = index_at(addr, 1);
         let idx2 = index_at(addr, 2);
+        let idx3 = index_at(addr, 3);
         crate::println!(
-            "[mm/dump] Address {:#x}: PGD[{}] L1[{}] L2[{}]",
+            "[mm/dump] Address {:#x}: PGD[{}] L1[{}] L2[{}] L3[{}]",
             addr,
             idx0,
             idx1,
-            idx2
+            idx2,
+            idx3
         );
+
+        // Actually walk the page table
+        let pgd_entry = unsafe { *((table + idx0 * 8) as *const u64) };
+        if pgd_entry & PTE_VALID != 0 && pgd_entry & PTE_TABLE != 0 {
+            let l1 = entry_to_paddr(pgd_entry);
+            let l1_entry = unsafe { *((l1 + idx1 * 8) as *const u64) };
+            if l1_entry & PTE_VALID != 0 && l1_entry & PTE_TABLE != 0 {
+                let l2 = entry_to_paddr(l1_entry);
+                let l2_entry = unsafe { *((l2 + idx2 * 8) as *const u64) };
+                if l2_entry & PTE_VALID != 0 && l2_entry & PTE_TABLE != 0 {
+                    let l3 = entry_to_paddr(l2_entry);
+                    let l3_entry = unsafe { *((l3 + idx3 * 8) as *const u64) };
+                    crate::println!(
+                        "[mm/dump]   L3[{}] = {:#x} (valid={}, page={})",
+                        idx3,
+                        l3_entry,
+                        l3_entry & PTE_VALID != 0,
+                        l3_entry & PTE_PAGE != 0
+                    );
+                } else {
+                    crate::println!("[mm/dump]   L2[{}] not a table: {:#x}", idx2, l2_entry);
+                }
+            } else {
+                crate::println!("[mm/dump]   L1[{}] not a table: {:#x}", idx1, l1_entry);
+            }
+        } else {
+            crate::println!("[mm/dump]   PGD[{}] not a table: {:#x}", idx0, pgd_entry);
+        }
     }
 }
 
@@ -486,6 +704,28 @@ pub fn enable_mmu_step4() {
         asm!("tlbi vmalle1is", options(nostack, preserves_flags));
         asm!("isb", options(nostack, preserves_flags));
         crate::println!("[mm/step4] TLB invalidated, MMU NOT enabled yet");
+
+        // Verify L2 table entry for GICR_WAKER (0x080A_0014) - now using 2MiB block
+        let gicr_waker_vaddr = 0x080A_0014usize;
+        let idx0 = index_at(gicr_waker_vaddr, 0);
+        let idx1 = index_at(gicr_waker_vaddr, 1);
+        let idx2 = index_at(gicr_waker_vaddr, 2);
+
+        let pgd_entry = *((table + idx0 * 8) as *const u64);
+        let l1 = entry_to_paddr(pgd_entry);
+        let l1_entry = *((l1 + idx1 * 8) as *const u64);
+        let l2 = entry_to_paddr(l1_entry);
+        let l2_entry = *((l2 + idx2 * 8) as *const u64);
+
+        crate::println!("[mm/step4] GICR_WAKER (0x080A_0014) page table walk:");
+        crate::println!(
+            "[mm/step4]   PGD[{}] = {:#x} (L1={:#x})",
+            idx0,
+            pgd_entry,
+            l1
+        );
+        crate::println!("[mm/step4]   L1[{}] = {:#x} (L2={:#x})", idx1, l1_entry, l2);
+        crate::println!("[mm/step4]   L2[{}] = {:#x} (block entry)", idx2, l2_entry);
     }
 }
 

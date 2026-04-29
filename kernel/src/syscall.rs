@@ -79,14 +79,7 @@ fn sys_exit(code: u64, _a1: u64, _a2: u64, _a3: u64, _a4: u64, _a5: u64) -> u64 
         crate::task::current_id().0,
         code
     );
-    unsafe {
-        let current = crate::task::current_id().0 as usize;
-        core::arch::asm!("str xzr, [{0}]", in(reg) current);
-    }
-    crate::task::yield_now();
-    loop {
-        crate::task::yield_now();
-    }
+    crate::task::exit_current();
 }
 
 fn sys_sleep(ms: u64, _a1: u64, _a2: u64, _a3: u64, _a4: u64, _a5: u64) -> u64 {

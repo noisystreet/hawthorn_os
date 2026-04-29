@@ -143,8 +143,18 @@ unsafe fn gicv3_dist_init() {
 /// # Safety
 /// Must be called once per core during early boot.
 unsafe fn gicv3_redist_init() {
+    // Ensure any previous memory operations are complete before accessing GIC
+    asm!("dsb ish", options(nostack, preserves_flags));
+    asm!("isb", options(nostack, preserves_flags));
     // Wake up the redistributor: clear ProcessorSleep bit
-    let waker = mmio_read32(GICR_WAKER);
+    // Use inline assembly to avoid any compiler optimizations
+    let waker: u32;
+    asm!(
+        "ldr {val:w}, [{addr}]",
+        addr = in(reg) GICR_WAKER,
+        val = out(reg) waker,
+        options(nostack, preserves_flags)
+    );
     mmio_write32(GICR_WAKER, waker & !0x0000_0002);
     // Wait for ChildrenAsleep to clear (indicates redistributor is ready)
     while mmio_read32(GICR_WAKER) & 0x0000_0004 != 0 {}
