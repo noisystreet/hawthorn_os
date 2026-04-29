@@ -1,0 +1,69 @@
+# 重要 Bug 修复说明（工程备忘）
+
+> **[English](./en/BUGFIX_NOTES.md)** — English mirror of this document.
+
+本文记录 **已实现且影响行为/ABI** 的修复，便于 code review、回归与后续 IPC/隔离演进时对照。行号以当时源码为准，以仓库实际文件为准。
+
+---
+
+## 2026-04-29：syscall 返回值、`SYS_write` 指针语义、用户任务资源回收
+
+### 1. `Errno::as_u64` 与 `x0` 错误码约定不一致
+
+| 项目 | 说明 |
+|------|------|
+| **现象** | 内核返回 `EFAULT` 等错误时，`x0` 曾出现 **小正数**（如 `14`），与 `hawthorn_syscall_abi` 文档及 `is_error()` / `errno_from_ret()` 所假设的 **负 errno** 不一致。 |
+| **根因** | `#[repr(i64)]` 的 `Errno` 判别式为 **正 errno 编号**；旧实现将 `self as i64 as u64` 直接当作返回值，得到的是正数而非 `-errno` 的补码。 |
+| **修复** | `Errno::as_u64()`：`Ok` → `0`；其余 → **`(-(self as i64)) as u64`**（即 Linux 风格 **负 errno** 的 `x0` 编码）。`as_i64()` 仍表示 **POSIX 正 errno 编号**（文档已区分）。 |
+| **涉及文件** | `syscall_abi/src/lib.rs` |
+
+---
+
+### 2. `SYS_write` 将 EL1 内核缓冲区误判为用户指针
+
+| 项目 | 说明 |
+|------|------|
+| **现象** | EL1 任务在栈上的合法缓冲区调用 `SYS_write` 时，若仅按 **用户 VA 窗口**（如 `0x1000..0x8000`）校验，会把内核 VA **一律判为非法**，错误返回 `EFAULT` 或长度异常。 |
+| **根因** | 「用户态 `copy_from_user`」策略被误用于 **当前线程为 EL1** 的路径。 |
+| **修复** | 按 **`current_is_user()`** 分支：**EL0** 仍使用用户可访问 VA 范围 + 安全读；**EL1** 仅在 **与 `mm`/`frame_alloc` 一致的身份映射 RAM 窗口**（`0x4000_0000..0x4800_0000`）内拷贝，否则返回 `EFAULT`，不直接解引用任意指针。 |
+| **涉及文件** | `kernel/src/syscall.rs` |
+
+---
+
+### 3. EL1 `SYS_write` 对坏指针直接拷贝触发 Data Abort
+
+| 项目 | 说明 |
+|------|------|
+| **现象** | 对未映射地址（如 `0xdeadbeef`）执行 `copy_nonoverlapping` 时 **CPU 同步异常**（日志中可见 `EC=0x25` 等），而非返回 `EFAULT`。 |
+| **根因** | EL1 路径在引入「内核直拷」时缺少 **先验范围检查**，坏指针仍会触碰 MMU。 |
+| **修复** | 与上一节同一 **RAM 窗口** 校验：越界则 **`Errno::EFAULT`**，成功路径再拷贝。 |
+| **涉及文件** | `kernel/src/syscall.rs` |
+
+---
+
+### 4. 用户任务退出后物理帧 / 用户页表未回收
+
+| 项目 | 说明 |
+|------|------|
+| **现象** | `sys_exit` 仅调度离开，用户代码页、栈页、用户页表根等 **仍占用 bump 分配器**，重复创建用户任务易耗尽或泄漏。 |
+| **根因** | 无集中释放路径；`create_user` 部分失败路径也未回滚。 |
+| **修复** | 每任务槽位侧表记录 **用户自有帧**；`exit_current` / `task_exit` 调用 **`release_task_resources`**；`create_user` 失败走 **`cleanup_user_allocation`**。 |
+| **实现注意** | 不宜在 `Task` 内嵌 **大数组**（易触发编译器 **SIMD/大块 memcpy**）；当前使用 **独立 `static` 表 + 标量循环**，避免 EL1 **未开 FP** 时的非法指令类异常（曾见 `EC=0x07` 类问题）。 |
+| **涉及文件** | `kernel/src/task.rs` |
+
+---
+
+### 5. 回归与可观测性
+
+| 项目 | 说明 |
+|------|------|
+| **脚本** | `scripts/verify_kernel_qemu_virt_el0_serial.sh` 校验 banner、EL0 输出、EL1 合法 `SYS_write` 长度、坏指针 **`EFAULT (-14)`**、`sys_exit(0)` 日志及 **`[task] released user resources:`**。 |
+| **演示** | `kernel/src/boot_qemu_virt.rs` 中 `task D` 注入坏指针 `SYS_write`，串口打印 **有符号** 返回值便于对照。 |
+
+---
+
+## 相关文档
+
+- [EL0_BUGS.md](./EL0_BUGS.md)（EL0 bring-up 历史缺陷）
+- [SYSCALL_ABI.md](./SYSCALL_ABI.md)（调用约定与返回值）
+- [KERNEL.md](./KERNEL.md)（内核模块）

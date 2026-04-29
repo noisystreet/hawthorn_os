@@ -14,6 +14,12 @@
 use hawthorn_syscall_abi::{Errno, SYS_EXIT, SYS_GETPID, SYS_SLEEP, SYS_WRITE, SYS_YIELD};
 
 const MAX_SYSCALL: u64 = 64;
+const USER_VA_MIN: usize = 0x1000;
+const USER_VA_MAX_EXCL: usize = 0x8000;
+const WRITE_CHUNK_SIZE: usize = 256;
+/// Identity RAM window (see `kernel/src/mm.rs` / `frame_alloc`).
+const KERNEL_RAM_START: usize = 0x4000_0000;
+const KERNEL_RAM_END_EXCL: usize = 0x4800_0000;
 
 type SyscallHandler = fn(u64, u64, u64, u64, u64, u64) -> u64;
 
@@ -49,19 +55,78 @@ fn sys_write(fd: u64, buf: u64, len: u64, _a3: u64, _a4: u64, _a5: u64) -> u64 {
         return Errno::EBADF.as_u64();
     }
 
-    let ptr = buf as *const u8;
     let count = len as usize;
 
-    if ptr.is_null() || count == 0 {
+    if buf == 0 || count == 0 {
         return Errno::EINVAL.as_u64();
     }
 
-    unsafe {
-        let slice = core::slice::from_raw_parts(ptr, count);
-        crate::boot_qemu_virt::pl011_write_bytes(slice);
+    let mut copied = 0usize;
+    let mut chunk = [0u8; WRITE_CHUNK_SIZE];
+
+    while copied < count {
+        let n = core::cmp::min(WRITE_CHUNK_SIZE, count - copied);
+        let user_src = (buf as usize).saturating_add(copied);
+
+        if copy_write_payload(user_src, &mut chunk[..n]).is_err() {
+            return Errno::EFAULT.as_u64();
+        }
+
+        // SAFETY: PL011 UART has been initialized during early boot.
+        unsafe {
+            crate::boot_qemu_virt::pl011_write_bytes(&chunk[..n]);
+        }
+        copied += n;
     }
 
     len
+}
+
+fn copy_write_payload(src: usize, dst: &mut [u8]) -> Result<(), Errno> {
+    if dst.is_empty() {
+        return Ok(());
+    }
+
+    if crate::task::current_is_user() {
+        if !user_range_valid(src, dst.len()) {
+            return Err(Errno::EFAULT);
+        }
+        // SAFETY: `user_range_valid` bounds the EL0 buffer; `dst` is a kernel buffer.
+        unsafe {
+            for (i, out) in dst.iter_mut().enumerate() {
+                *out = core::ptr::read_volatile((src + i) as *const u8);
+            }
+        }
+    } else {
+        if !kernel_buffer_range_ok(src, dst.len()) {
+            return Err(Errno::EFAULT);
+        }
+        // SAFETY: `kernel_buffer_range_ok` ensures the source lies in mapped RAM.
+        unsafe {
+            core::ptr::copy_nonoverlapping(src as *const u8, dst.as_mut_ptr(), dst.len());
+        }
+    }
+    Ok(())
+}
+
+fn kernel_buffer_range_ok(start: usize, len: usize) -> bool {
+    if len == 0 {
+        return true;
+    }
+    let Some(end) = start.checked_add(len) else {
+        return false;
+    };
+    start >= KERNEL_RAM_START && end <= KERNEL_RAM_END_EXCL && start < end
+}
+
+fn user_range_valid(start: usize, len: usize) -> bool {
+    if len == 0 {
+        return true;
+    }
+    let Some(end) = start.checked_add(len) else {
+        return false;
+    };
+    start >= USER_VA_MIN && end <= USER_VA_MAX_EXCL && start < end
 }
 
 fn sys_yield(_a0: u64, _a1: u64, _a2: u64, _a3: u64, _a4: u64, _a5: u64) -> u64 {

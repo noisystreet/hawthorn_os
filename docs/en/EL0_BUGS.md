@@ -152,3 +152,9 @@ cat /tmp/hawthorn_serial.log
 Ensure:
 1. Existing EL1 functionality (task scheduling, SVC syscall) is not broken
 2. New EL0 functionality gradually works (starting from "hello from EL0!" output)
+
+---
+
+## See also
+
+- Post-bring-up fixes for **syscall return encoding, `SYS_write` pointer rules, and user-task teardown**: [BUGFIX_NOTES.md](./BUGFIX_NOTES.md).

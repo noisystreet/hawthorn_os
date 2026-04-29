@@ -31,6 +31,7 @@ extern "C" {
 const MAX_TASKS: usize = 8;
 
 const STACK_SIZE: usize = 4096;
+const MAX_USER_OWNED_FRAMES: usize = 16;
 
 const DEFAULT_TIME_SLICE: u64 = 10;
 
@@ -104,6 +105,9 @@ impl Task {
 
 #[allow(static_mut_refs)]
 static mut TASK_TABLE: [Task; MAX_TASKS] = [Task::EMPTY; MAX_TASKS];
+static mut USER_OWNED_FRAMES: [[usize; MAX_USER_OWNED_FRAMES]; MAX_TASKS] =
+    [[0; MAX_USER_OWNED_FRAMES]; MAX_TASKS];
+static mut USER_OWNED_FRAME_COUNTS: [usize; MAX_TASKS] = [0; MAX_TASKS];
 
 static mut CURRENT_TASK: usize = 0;
 
@@ -154,6 +158,7 @@ extern "C" {
 #[no_mangle]
 extern "C" fn task_exit() -> ! {
     unsafe {
+        release_task_resources(CURRENT_TASK);
         TASK_TABLE[CURRENT_TASK].state = TaskState::Exited;
         NEED_RESCHEDULE = true;
         schedule();
@@ -219,6 +224,10 @@ pub fn create(entry: extern "C" fn(), priority: u8) -> Option<TaskId> {
             saved_spsr: 0,
             saved_sp_el0: 0,
         };
+        for slot in 0..MAX_USER_OWNED_FRAMES {
+            USER_OWNED_FRAMES[idx][slot] = 0;
+        }
+        USER_OWNED_FRAME_COUNTS[idx] = 0;
 
         Some(TaskId(idx as u16))
     }
@@ -268,10 +277,27 @@ pub fn create_user(entry: usize, stack_top: usize) -> Option<TaskId> {
         let user_prog_end = core::ptr::addr_of!(__user_program_end) as usize;
         let user_prog_size = user_prog_end.saturating_sub(user_prog_start);
         let pages_needed = (user_prog_size + 4095) / 4096;
+        for slot in 0..MAX_USER_OWNED_FRAMES {
+            USER_OWNED_FRAMES[idx][slot] = 0;
+        }
+        USER_OWNED_FRAME_COUNTS[idx] = 0;
+        if pages_needed + 1 > MAX_USER_OWNED_FRAMES {
+            crate::println!(
+                "[task] create_user needs {} frames, max tracked {}",
+                pages_needed + 1,
+                MAX_USER_OWNED_FRAMES
+            );
+            crate::frame_alloc::free_frame(user_pt);
+            return None;
+        }
+
         for i in 0..pages_needed {
             let src_paddr = user_prog_start + i * 4096;
             let dst_vaddr = entry + i * 4096;
-            let frame = crate::frame_alloc::alloc_frame()?;
+            let Some(frame) = crate::frame_alloc::alloc_frame() else {
+                cleanup_user_allocation(idx, user_pt);
+                return None;
+            };
             core::ptr::copy_nonoverlapping(src_paddr as *const u8, frame as *mut u8, 4096);
             if !crate::mm::map_user_page(
                 user_pt,
@@ -279,21 +305,34 @@ pub fn create_user(entry: usize, stack_top: usize) -> Option<TaskId> {
                 frame,
                 crate::mm::PTE_AP_RW_ALL | crate::mm::ATTR_NORMAL,
             ) {
+                crate::frame_alloc::free_frame(frame);
+                cleanup_user_allocation(idx, user_pt);
                 return None;
             }
+            let owned = USER_OWNED_FRAME_COUNTS[idx];
+            USER_OWNED_FRAMES[idx][owned] = frame;
+            USER_OWNED_FRAME_COUNTS[idx] = owned + 1;
         }
 
         // Map user stack (4K stack page)
         let user_stack_bottom = stack_top - STACK_SIZE;
-        let stack_frame = crate::frame_alloc::alloc_frame()?;
+        let Some(stack_frame) = crate::frame_alloc::alloc_frame() else {
+            cleanup_user_allocation(idx, user_pt);
+            return None;
+        };
         if !crate::mm::map_user_page(
             user_pt,
             user_stack_bottom,
             stack_frame,
             crate::mm::PTE_AP_RW_ALL | crate::mm::ATTR_NORMAL | crate::mm::PTE_UXN,
         ) {
+            crate::frame_alloc::free_frame(stack_frame);
+            cleanup_user_allocation(idx, user_pt);
             return None;
         }
+        let owned = USER_OWNED_FRAME_COUNTS[idx];
+        USER_OWNED_FRAMES[idx][owned] = stack_frame;
+        USER_OWNED_FRAME_COUNTS[idx] = owned + 1;
 
         TASK_TABLE[idx] = Task {
             sp: ctx_ptr as u64,
@@ -320,6 +359,7 @@ pub fn create_user(entry: usize, stack_top: usize) -> Option<TaskId> {
 
 pub fn exit_current() -> ! {
     unsafe {
+        release_task_resources(CURRENT_TASK);
         TASK_TABLE[CURRENT_TASK].state = TaskState::Exited;
         NEED_RESCHEDULE = true;
         schedule();
@@ -327,6 +367,60 @@ pub fn exit_current() -> ! {
     loop {
         core::hint::spin_loop();
     }
+}
+
+fn cleanup_user_allocation(task_idx: usize, user_pt: usize) {
+    let count = unsafe { USER_OWNED_FRAME_COUNTS[task_idx] };
+    for i in 0..count {
+        let frame = unsafe { USER_OWNED_FRAMES[task_idx][i] };
+        if frame != 0 {
+            crate::frame_alloc::free_frame(frame);
+        }
+    }
+    unsafe {
+        for slot in 0..MAX_USER_OWNED_FRAMES {
+            USER_OWNED_FRAMES[task_idx][slot] = 0;
+        }
+        USER_OWNED_FRAME_COUNTS[task_idx] = 0;
+    }
+    crate::frame_alloc::free_frame(user_pt);
+}
+
+fn release_task_resources(task_idx: usize) {
+    let task = unsafe { &mut TASK_TABLE[task_idx] };
+    if !task.is_user {
+        return;
+    }
+    let released_frames = unsafe { USER_OWNED_FRAME_COUNTS[task_idx] };
+    let released_pt = task.user_page_table;
+
+    for i in 0..released_frames {
+        let frame = unsafe { USER_OWNED_FRAMES[task_idx][i] };
+        if frame != 0 {
+            crate::frame_alloc::free_frame(frame);
+        }
+    }
+    unsafe {
+        for slot in 0..MAX_USER_OWNED_FRAMES {
+            USER_OWNED_FRAMES[task_idx][slot] = 0;
+        }
+        USER_OWNED_FRAME_COUNTS[task_idx] = 0;
+    }
+
+    if task.user_page_table != 0 {
+        crate::frame_alloc::free_frame(task.user_page_table);
+        task.user_page_table = 0;
+    }
+    task.saved_elr = 0;
+    task.saved_spsr = 0;
+    task.saved_sp_el0 = 0;
+    task.is_user = false;
+    crate::println!(
+        "[task] released user resources: task={} frames={} page_table={:#x}",
+        task_idx,
+        released_frames,
+        released_pt
+    );
 }
 
 /// Check if current task is a user task.

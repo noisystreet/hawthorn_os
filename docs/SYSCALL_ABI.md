@@ -12,7 +12,7 @@
 |------|------|
 | 陷入方式 | **`SVC`** 进入 EL1 内核（具体立即数或 x8 传 syscall 号：**TBD**） |
 | 参数寄存器 | 遵循 AAPCS64 与 Linux aarch64 syscall 惯例的 **子集** 或 **自定义最小集**（二选一拍板） |
-| 返回值 | `x0` = 结果或错误码；错误码枚举与 `errno` 是否对齐 POSIX 子集：**TBD** |
+| 返回值 | `x0` = 成功时为非负结果；**错误时为负 errno**（与 Linux aarch64 惯例一致，见 `hawthorn_syscall_abi::Errno::as_u64`）。说明见 [BUGFIX_NOTES.md](./BUGFIX_NOTES.md) 第 1 节。 |
 | 易失 / 保存寄存器 | 按 AAPCS64 被调用方保存约定文档化 |
 
 ---
@@ -42,6 +42,7 @@
 
 ## 相关文档
 
+- [重要 Bug 修复说明](./BUGFIX_NOTES.md)
 - [微内核设计](./KERNEL.md)
 - [架构说明](./ARCHITECTURE.md)
 - [移植指南](./PORTING.md)

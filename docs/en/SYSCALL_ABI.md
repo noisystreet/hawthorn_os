@@ -12,7 +12,7 @@ User services and the **Hawthorn (山楂) microkernel** interact through a **sta
 |------|-----------|
 | Trap mechanism | **`SVC`** into EL1 kernel (immediate vs `x8` syscall number: **TBD**) |
 | Argument registers | **Subset** of AAPCS64 + Linux aarch64 syscall style, or **custom minimal set** (pick one) |
-| Return value | `x0` = result or error code; errno vs POSIX subset: **TBD** |
+| Return value | `x0` = non-negative result on success; **errors as negative errno** (Linux aarch64 style; see `hawthorn_syscall_abi::Errno::as_u64`). See [BUGFIX_NOTES.md](./BUGFIX_NOTES.md), section 1. |
 | Volatile / saved | Document per AAPCS64 callee rules |
 
 ---
@@ -42,6 +42,7 @@ When ABI freezes, fill this section and generate `syscall_abi` constants.
 
 ## Related documents
 
+- [Important bugfix notes](./BUGFIX_NOTES.md)
 - [Microkernel design](./KERNEL.md)
 - [Architecture](./ARCHITECTURE.md)
 - [Porting](./PORTING.md)

@@ -233,6 +233,24 @@ pub extern "C" fn kernel_main() -> ! {
         }
         crate::println!("[task D] SYS_write returned {}", ret);
 
+        let bad_ret: u64;
+        unsafe {
+            asm!(
+                "mov x8, #0",
+                "mov x0, #1",
+                "mov x1, {ptr}",
+                "mov x2, #8",
+                "svc #0",
+                "mov {ret}, x0",
+                ptr = in(reg) 0xdead_beef_u64,
+                ret = out(reg) bad_ret,
+            );
+        }
+        crate::println!(
+            "[task D] SYS_write(bad ptr) returned {} (expect -14 EFAULT)",
+            bad_ret as i64
+        );
+
         crate::println!("[task D] done");
     }
     crate::task::create(task_a, 1);

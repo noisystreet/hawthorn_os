@@ -53,12 +53,19 @@ pub enum Errno {
 }
 
 impl Errno {
+    /// POSIX-style errno number (positive), matching the enum discriminant.
     pub fn as_i64(self) -> i64 {
         self as i64
     }
 
+    /// Encodes `x0` return value for syscall handlers: `Ok` → `0`, errors → **`-errno`** (two's complement).
     pub fn as_u64(self) -> u64 {
-        self.as_i64() as u64
+        let code = self as i64;
+        if code == 0 {
+            0
+        } else {
+            (-code) as u64
+        }
     }
 
     pub fn is_ok(self) -> bool {

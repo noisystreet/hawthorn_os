@@ -139,3 +139,9 @@ cat /tmp/hawthorn_serial.log
 确保：
 1. 原有 EL1 功能（任务调度、SVC syscall）不被破坏
 2. 新增 EL0 功能逐步生效（从 "hello from EL0!" 输出开始验证）
+
+---
+
+## 另见
+
+- bring-up 之后与 **syscall 返回值、`SYS_write` 指针语义、用户任务资源回收** 相关的修复见 [BUGFIX_NOTES.md](./BUGFIX_NOTES.md)。

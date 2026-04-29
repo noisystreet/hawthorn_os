@@ -25,6 +25,7 @@ Keep **Chinese and English in sync** on every substantive edit (see `.cursor/rul
 | [TODO.md](./TODO.md) | [../TODO.md](../TODO.md) |
 | [PR_ISSUE_PLAN.md](./PR_ISSUE_PLAN.md) | [../PR_ISSUE_PLAN.md](../PR_ISSUE_PLAN.md) |
 | [M6_MMU_DEBUG_LOG.md](./M6_MMU_DEBUG_LOG.md) | [../M6_MMU_DEBUG_LOG.md](../M6_MMU_DEBUG_LOG.md) |
+| [BUGFIX_NOTES.md](./BUGFIX_NOTES.md) | [../BUGFIX_NOTES.md](../BUGFIX_NOTES.md) |
 
 ## Pre-commit
 

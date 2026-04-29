@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# Verify hawthorn_kernel_qemu_virt serial output includes both:
+# Verify hawthorn_kernel_qemu_virt serial output includes:
 # 1) kernel banner
-# 2) EL0 userspace demo line ("hello from EL0!")
+# 2) EL0 demo ("hello from EL0!")
+# 3) EL1 bad-pointer SYS_write -> EFAULT (-14)
+# 4) EL0 SYS_exit path: "[syscall] task N exit(0)"
+# 5) user resource release after exit
 #
-# This is a stricter regression check than verify_kernel_qemu_virt_serial.sh.
+# Stricter than verify_kernel_qemu_virt_serial.sh; failures name the missing pattern.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -101,5 +104,33 @@ if ! rg -q 'hello from EL0!' "${OUT}"; then
   exit 1
 fi
 
-say "[hawthorn-el0] OK: kernel banner + EL0 demo found."
+if ! rg -q '\[task D\] SYS_write returned 22' "${OUT}"; then
+  say "[hawthorn-el0] FAIL: EL1 kernel-buffer SYS_write should return full length (22)"
+  say "[hawthorn-el0] captured text:"
+  cat "${OUT}" >&2 || true
+  exit 1
+fi
+
+if ! rg -q '\[task D\] SYS_write\(bad ptr\) returned -14 \(expect -14 EFAULT\)' "${OUT}"; then
+  say "[hawthorn-el0] FAIL: bad-pointer SYS_write did not return EFAULT (-14)"
+  say "[hawthorn-el0] captured text:"
+  cat "${OUT}" >&2 || true
+  exit 1
+fi
+
+if ! rg -q '\[syscall\] task [0-9]+ exit\(0\)' "${OUT}"; then
+  say "[hawthorn-el0] FAIL: missing EL0 sys_exit(0) log (expect [syscall] task N exit(0))"
+  say "[hawthorn-el0] captured text:"
+  cat "${OUT}" >&2 || true
+  exit 1
+fi
+
+if ! rg -q '\[task\] released user resources:' "${OUT}"; then
+  say "[hawthorn-el0] FAIL: missing user resource release output"
+  say "[hawthorn-el0] captured text:"
+  cat "${OUT}" >&2 || true
+  exit 1
+fi
+
+say "[hawthorn-el0] OK: banner + EL0 hello + EFAULT bad-ptr + exit(0) + resource release."
 exit 0
