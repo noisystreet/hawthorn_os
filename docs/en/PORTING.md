@@ -15,6 +15,7 @@ Host checks:
 ```bash
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
 cargo check -p hawthorn_kernel
   cargo check -p hawthorn_kernel --target aarch64-unknown-none
   cargo build -p hawthorn_kernel --features bare-metal --target aarch64-unknown-none
@@ -25,14 +26,14 @@ cargo check -p hawthorn_kernel
 
 ### 1.1 Git pre-commit (optional)
 
-Root [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) runs **`cargo fmt --check`**, **`cargo clippy --workspace -D warnings`** (same as CI), and **`commit-msg`** via **`scripts/commit_msg_bilingual.py`** (English Conventional **line 1** + **line 2** Chinese, separate lines). Install [pre-commit](https://pre-commit.com/), then `pre-commit install`. See [CONTRIBUTING.md](../../CONTRIBUTING.md) and [COMMIT_CONVENTIONS.md](./COMMIT_CONVENTIONS.md) §1.0.
+Root [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) runs **`cargo fmt --check`**, **`cargo clippy --workspace -D warnings`**, **`cargo test --workspace`** (same as CI), and **`commit-msg`** via **`scripts/commit_msg_bilingual.py`** (English Conventional **line 1** + **line 2** Chinese, separate lines). Install [pre-commit](https://pre-commit.com/), then `pre-commit install`. See [CONTRIBUTING.md](../../CONTRIBUTING.md) and [COMMIT_CONVENTIONS.md](./COMMIT_CONVENTIONS.md) §1.0.
 
 ### 1.2 QEMU `virt` minimal image (optional)
 
 The linker script **`kernel/link-qemu_virt.ld`** (RAM **`0x4000_0000`** / 128 MiB, **`__stack_top`**, BSS symbols) is shared by **`hawthorn_kernel`** and **`hawthorn_qemu_minimal`** so the layout stays single-sourced.
 
 - **`hawthorn_kernel`** ([`kernel/`](../../kernel/)): with **`--features bare-metal`** and **`--target aarch64-unknown-none`**, builds the bare-metal binary **`hawthorn_kernel_qemu_virt`** (**`_start` → `kernel_main`**, PL011 **`0x9000_0000`**, panic uses the same UART). Check: `cargo check -p hawthorn_kernel --target aarch64-unknown-none` (library); full image: `cargo build -p hawthorn_kernel --features bare-metal --target aarch64-unknown-none`.
-- **`hawthorn_qemu_minimal`** ([`qemu_minimal/`](../../qemu_minimal/)): same target + feature for a standalone smoke ELF. Without **`bare-metal`**, both crates build stub libraries on the host so **`cargo clippy --workspace`** stays fast.
+- **`hawthorn_qemu_minimal`** ([`qemu_minimal/`](../../qemu_minimal/)): same target + feature for a standalone smoke ELF. Without **`bare-metal`**, both crates build stub libraries on the host so **`cargo clippy --workspace`** stays fast. The stub **`no_std`** library has no unit tests, and building a host lib test harness **SIGSEGV**s, so that crate sets **`[lib] test = false`** in **`Cargo.toml`**. **`cargo test --workspace`** still covers the rest of the workspace; smoke coverage remains AArch64 builds + QEMU scripts.
 
 - **Build (example):** `cargo build -p hawthorn_qemu_minimal --features bare-metal --target aarch64-unknown-none` (for release, set `PROFILE=release` when using the script below).
 - **Run:** install **`qemu-system-aarch64`**, then run [`scripts/run_qemu_minimal.sh`](../../scripts/run_qemu_minimal.sh); the script prints progress to **stderr** before QEMU starts (so it does not look "stuck"). Equivalent CLI: **`-machine virt,gic-version=3 -cpu cortex-a76 -nographic -kernel <ELF>`** (`-nographic` wires the UART to stdio; **do not** also pass **`-serial stdio`** or chardevs may fight over stdio). **`gic-version=3` is mandatory**: QEMU `virt` defaults to GICv2, but the kernel GIC driver only supports GICv3.

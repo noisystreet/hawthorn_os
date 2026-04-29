@@ -39,7 +39,7 @@ hawthorn/   # suggested clone name; crate is hawthorn regardless
 ├── qemu_minimal/        # hawthorn_qemu_minimal — QEMU virt PL011 smoke binary
 ├── docs/, docs/en/      # Chinese + English mirrors
 ├── .cursor/rules/       # Cursor agent rules (hawthorn-*.mdc)
-├── .github/workflows/   # CI: fmt, clippy, cargo check (host + aarch64-unknown-none)
+├── .github/workflows/   # CI: fmt, clippy, test, cargo check (host + aarch64-unknown-none)
 ├── .pre-commit-config.yaml
 ├── Cargo.toml           # workspace
 └── rust-toolchain.toml  # stable + aarch64-unknown-none + rustfmt + clippy
@@ -56,13 +56,14 @@ Planned (not necessarily present yet): `servers/`, `hal/`, `bsp/orangepi5-rk3588
 ```bash
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
 cargo check -p hawthorn_kernel
 cargo check -p hawthorn_kernel --target aarch64-unknown-none
 cargo build -p hawthorn_kernel --features bare-metal --target aarch64-unknown-none
 cargo build -p hawthorn_qemu_minimal --features bare-metal --target aarch64-unknown-none
 ```
 
-Optional: `pre-commit install` then each `git commit` runs **fmt/clippy** (`pre-commit` stage) and validates the **commit message first line** (**`commit-msg`**, Conventional Commits — see `docs/COMMIT_CONVENTIONS.md`). Optional: `git config commit.template .gitmessage` (see `CONTRIBUTING.md`).
+Optional: `pre-commit install` then each `git commit` runs **fmt/clippy/test** (`pre-commit` stage) and validates the **commit message first line** (**`commit-msg`**, Conventional Commits — see `docs/COMMIT_CONVENTIONS.md`). Optional: `git config commit.template .gitmessage` (see `CONTRIBUTING.md`).
 
 ---
 

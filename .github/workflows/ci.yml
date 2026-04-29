@@ -26,6 +26,9 @@ jobs:
       - name: clippy (workspace)
         run: cargo clippy --workspace --all-targets -- -D warnings
 
+      - name: test (workspace)
+        run: cargo test --workspace
+
       - name: check (host)
         run: cargo check -p hawthorn_kernel
 

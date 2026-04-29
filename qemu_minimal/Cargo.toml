@@ -9,6 +9,9 @@ rust-version = "1.74"
 
 [lib]
 path = "src/lib.rs"
+# Host `cargo test` for this `no_std` stub links a broken test harness (SIGSEGV);
+# the crate has no unit tests; smoke coverage is bare-metal build + QEMU scripts.
+test = false
 
 [features]
 default = []

@@ -24,4 +24,8 @@
 
 双语同步规则见 [`.cursor/rules/hawthorn-docs-bilingual.mdc`](../.cursor/rules/hawthorn-docs-bilingual.mdc)。
 
+## Git pre-commit（可选）
+
+在仓库根安装 [pre-commit](https://pre-commit.com/) 并执行 `pre-commit install` 后，`pre-commit` 钩子会运行与 CI 一致的 **`cargo fmt --check`**、**`cargo clippy --workspace -D warnings`**、**`cargo test --workspace`**；**`commit-msg`** 由 **`scripts/commit_msg_bilingual.py`** 校验双语标题（英文 Conventional **第 1 行** + **第 2 行**中文）。详见 [CONTRIBUTING.md](../CONTRIBUTING.md)、[COMMIT_CONVENTIONS.md](./COMMIT_CONVENTIONS.md) §1.0。
+
 **编程 Agent：** 根目录 [AGENTS.md](../AGENTS.md)。

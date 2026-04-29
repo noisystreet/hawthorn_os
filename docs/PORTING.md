@@ -14,6 +14,7 @@
   ```bash
   cargo fmt --all -- --check
   cargo clippy --workspace --all-targets -- -D warnings
+  cargo test --workspace
   cargo check -p hawthorn_kernel
   cargo check -p hawthorn_kernel --target aarch64-unknown-none
   cargo build -p hawthorn_kernel --features bare-metal --target aarch64-unknown-none
@@ -24,14 +25,14 @@
 
 ### 1.1 Git pre-commit（可选）
 
-仓库根目录 [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) 定义 **`cargo fmt --check`**、**`cargo clippy --workspace -D warnings`**（与 CI 一致），以及 **`commit-msg`** 钩子（**`scripts/commit_msg_bilingual.py`**：英文 Conventional **第 1 行** + **第 2 行**中文、不同行）。安装 [pre-commit](https://pre-commit.com/) 后执行 `pre-commit install` 即可。详见 [CONTRIBUTING.md](../CONTRIBUTING.md) 与 [COMMIT_CONVENTIONS.md](./COMMIT_CONVENTIONS.md) §1.0。
+仓库根目录 [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) 定义 **`cargo fmt --check`**、**`cargo clippy --workspace -D warnings`**、**`cargo test --workspace`**（与 CI 一致），以及 **`commit-msg`** 钩子（**`scripts/commit_msg_bilingual.py`**：英文 Conventional **第 1 行** + **第 2 行**中文、不同行）。安装 [pre-commit](https://pre-commit.com/) 后执行 `pre-commit install` 即可。详见 [CONTRIBUTING.md](../CONTRIBUTING.md) 与 [COMMIT_CONVENTIONS.md](./COMMIT_CONVENTIONS.md) §1.0。
 
 ### 1.2 QEMU `virt` 最小镜像（可选）
 
 链接脚本 **`kernel/link-qemu_virt.ld`**（RAM **`0x4000_0000`** / 128 MiB、**`__stack_top`**、BSS 符号）为 **`hawthorn_kernel`** 与 **`hawthorn_qemu_minimal`** 共用，避免两处漂移。
 
 - **`hawthorn_kernel`**：crate [`kernel/`](../kernel/) 在 **`--features bare-metal`** 且 **`--target aarch64-unknown-none`** 下可构建裸机二进制 **`hawthorn_kernel_qemu_virt`**（**`_start` → `kernel_main`**，PL011 **`0x9000_0000`**，panic 亦走 PL011）。校验：`cargo check -p hawthorn_kernel --target aarch64-unknown-none`（库）；完整镜像：`cargo build -p hawthorn_kernel --features bare-metal --target aarch64-unknown-none`。
-- **`hawthorn_qemu_minimal`**（[`qemu_minimal/`](../qemu_minimal/)）：同上目标与 feature 下为独立冒烟 ELF；未启用 **`bare-metal`** 时两 crate 在主机上仅构建占位库，便于 **`cargo clippy --workspace`**。
+- **`hawthorn_qemu_minimal`**（[`qemu_minimal/`](../qemu_minimal/)）：同上目标与 feature 下为独立冒烟 ELF；未启用 **`bare-metal`** 时两 crate 在主机上仅构建占位库，便于 **`cargo clippy --workspace`**。占位 **`no_std`** 库无单元测试，且主机上为其生成 lib 测试目标会 **SIGSEGV**，故该 crate 在 **`Cargo.toml`** 中为 **`[lib] test = false`**；**`cargo test --workspace`** 仍覆盖其余工作区成员，冒烟仍以 AArch64 构建与 QEMU 脚本为准。
 
 - **构建（示例）：** `cargo build -p hawthorn_qemu_minimal --features bare-metal --target aarch64-unknown-none`（发布模式可加 `PROFILE=release` 配合下方脚本）。
 - **运行：** 安装 **`qemu-system-aarch64`** 后执行 [`scripts/run_qemu_minimal.sh`](../scripts/run_qemu_minimal.sh)；脚本会在启动前向 **stderr** 打印进度（避免误以为「无反应」）。等价命令行使用 **`-machine virt,gic-version=3 -cpu cortex-a76 -nographic -kernel <ELF>`**（`-nographic` 将串口接到 stdio，**勿**再叠加 **`-serial stdio`**，否则易争用 stdio）。**必须指定 `gic-version=3`**：QEMU `virt` 默认使用 GICv2，而内核 GIC 驱动仅支持 GICv3。

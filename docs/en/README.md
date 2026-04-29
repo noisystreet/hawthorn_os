@@ -29,6 +29,6 @@ Keep **Chinese and English in sync** on every substantive edit (see `.cursor/rul
 
 ## Pre-commit
 
-Install [pre-commit](https://pre-commit.com/) and run `pre-commit install` at the repo root. Hooks run **`cargo fmt --check`**, **`cargo clippy --workspace -D warnings`**, and **`commit-msg`** ([`scripts/commit_msg_bilingual.py`](../../scripts/commit_msg_bilingual.py): **English line 1** + **Chinese line 2**, separate lines), matching [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml). Details: [CONTRIBUTING.md](../../CONTRIBUTING.md), [COMMIT_CONVENTIONS.md §1.0](./COMMIT_CONVENTIONS.md).
+Install [pre-commit](https://pre-commit.com/) and run `pre-commit install` at the repo root. Hooks run **`cargo fmt --check`**, **`cargo clippy --workspace -D warnings`**, **`cargo test --workspace`**, and **`commit-msg`** ([`scripts/commit_msg_bilingual.py`](../../scripts/commit_msg_bilingual.py): **English line 1** + **Chinese line 2**, separate lines), matching [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml). Details: [CONTRIBUTING.md](../../CONTRIBUTING.md), [COMMIT_CONVENTIONS.md §1.0](./COMMIT_CONVENTIONS.md).
 
 [← Parent `docs/`](../)

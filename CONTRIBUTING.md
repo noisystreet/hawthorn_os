@@ -11,7 +11,7 @@
 
 本仓库使用 [pre-commit](https://pre-commit.com/)：
 
-- **`pre-commit` 阶段**（每次 `git commit` 前）：**`cargo fmt --check`**、**`cargo clippy --workspace -D warnings`**（与 CI 一致）。  
+- **`pre-commit` 阶段**（每次 `git commit` 前）：**`cargo fmt --check`**、**`cargo clippy --workspace -D warnings`**、**`cargo test --workspace`**（与 CI 一致）。  
 - **`commit-msg` 阶段**：**`scripts/commit_msg_bilingual.py`** 要求提交说明前两条非注释行为 **英文 Conventional Commits 标题行** + **单独一行中文**（语义对应、不得与英文同行），详见 [提交规范](docs/COMMIT_CONVENTIONS.md) §1.0。
 
 ```bash
@@ -22,7 +22,7 @@ pre-commit install              # 安装 pre-commit + commit-msg（见 .pre-comm
 
 可选：`git config commit.template .gitmessage`，在编辑器中显示提交说明提示（`#` 行不会进入最终提交）。
 
-也可手动检查工作区（不含 commit-msg）：
+也可手动检查工作区（不含 commit-msg；含 fmt / clippy / test）：
 
 ```bash
 pre-commit run --all-files

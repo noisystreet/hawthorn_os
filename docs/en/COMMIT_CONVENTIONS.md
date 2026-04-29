@@ -8,7 +8,7 @@ Git **commit messages**, **branches**, and **pull requests** for the **Hawthorn 
 
 After **`pre-commit install`**:
 
-- **`pre-commit` stage:** `cargo fmt --check`, `cargo clippy --workspace -D warnings` (same as CI).  
+- **`pre-commit` stage:** `cargo fmt --check`, `cargo clippy --workspace -D warnings`, `cargo test --workspace` (same as CI).  
 - **`commit-msg` stage:** **`scripts/commit_msg_bilingual.py`** enforces the **bilingual subject** rules in **§1.0** below.
 
 Optional: `git config commit.template .gitmessage`.

@@ -41,6 +41,7 @@
 ```bash
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
 cargo check -p hawthorn_kernel
 cargo check -p hawthorn_kernel --target aarch64-unknown-none
 cargo build -p hawthorn_kernel --features bare-metal --target aarch64-unknown-none
@@ -49,7 +50,7 @@ cargo build -p hawthorn_qemu_minimal --features bare-metal --target aarch64-unkn
 
 `rust-toolchain.toml` 已指定 **stable** 与目标 **`aarch64-unknown-none`**。
 
-**提交前检查（推荐）**：安装 [pre-commit](https://pre-commit.com/) 后在仓库根执行 `pre-commit install`，与 CI 相同的 **格式化检查** 与 **Clippy** 会在 `git commit` 时运行。说明见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+**提交前检查（推荐）**：安装 [pre-commit](https://pre-commit.com/) 后在仓库根执行 `pre-commit install`，与 CI 相同的 **格式化检查**、**Clippy** 与 **工作区单元测试**（`cargo test --workspace`）会在 `git commit` 时运行。说明见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 镜像烧录、链接脚本与 **QEMU 最小镜像**（[`scripts/run_qemu_minimal.sh`](scripts/run_qemu_minimal.sh)）见 [docs/PORTING.md](docs/PORTING.md)。
 
