@@ -11,7 +11,10 @@
 //! - x0–x5 = arguments
 //! - x0  = return value (negative = Errno)
 
-use hawthorn_syscall_abi::{Errno, SYS_EXIT, SYS_GETPID, SYS_SLEEP, SYS_WRITE, SYS_YIELD};
+use hawthorn_syscall_abi::{
+    Errno, SYS_ENDPOINT_CALL, SYS_ENDPOINT_CREATE, SYS_ENDPOINT_DESTROY, SYS_ENDPOINT_RECV,
+    SYS_ENDPOINT_REPLY, SYS_EXIT, SYS_GETPID, SYS_SLEEP, SYS_WRITE, SYS_YIELD,
+};
 
 const MAX_SYSCALL: u64 = 64;
 const USER_VA_MIN: usize = 0x1000;
@@ -34,6 +37,11 @@ pub fn init() {
         SYSCALL_TABLE[SYS_GETPID as usize] = Some(sys_getpid);
         SYSCALL_TABLE[SYS_EXIT as usize] = Some(sys_exit);
         SYSCALL_TABLE[SYS_SLEEP as usize] = Some(sys_sleep);
+        SYSCALL_TABLE[SYS_ENDPOINT_CREATE as usize] = Some(sys_endpoint_create);
+        SYSCALL_TABLE[SYS_ENDPOINT_DESTROY as usize] = Some(sys_endpoint_destroy);
+        SYSCALL_TABLE[SYS_ENDPOINT_CALL as usize] = Some(sys_endpoint_call);
+        SYSCALL_TABLE[SYS_ENDPOINT_RECV as usize] = Some(sys_endpoint_recv);
+        SYSCALL_TABLE[SYS_ENDPOINT_REPLY as usize] = Some(sys_endpoint_reply);
     }
 }
 
@@ -150,4 +158,39 @@ fn sys_exit(code: u64, _a1: u64, _a2: u64, _a3: u64, _a4: u64, _a5: u64) -> u64 
 fn sys_sleep(ms: u64, _a1: u64, _a2: u64, _a3: u64, _a4: u64, _a5: u64) -> u64 {
     crate::task::sleep(ms);
     0
+}
+
+fn sys_endpoint_create(_a0: u64, _a1: u64, _a2: u64, _a3: u64, _a4: u64, _a5: u64) -> u64 {
+    match crate::endpoint::create() {
+        Some(id) => u64::from(id),
+        None => Errno::ENOMEM.as_u64(),
+    }
+}
+
+fn sys_endpoint_destroy(id: u64, _a1: u64, _a2: u64, _a3: u64, _a4: u64, _a5: u64) -> u64 {
+    match crate::endpoint::destroy(id) {
+        Ok(()) => 0,
+        Err(e) => e.as_u64(),
+    }
+}
+
+fn sys_endpoint_call(id: u64, msg: u64, _a2: u64, _a3: u64, _a4: u64, _a5: u64) -> u64 {
+    match crate::endpoint::call(id, msg) {
+        Ok(v) => v,
+        Err(e) => e.as_u64(),
+    }
+}
+
+fn sys_endpoint_recv(id: u64, _a1: u64, _a2: u64, _a3: u64, _a4: u64, _a5: u64) -> u64 {
+    match crate::endpoint::recv(id) {
+        Ok(v) => v,
+        Err(e) => e.as_u64(),
+    }
+}
+
+fn sys_endpoint_reply(id: u64, client_id: u64, msg: u64, _a3: u64, _a4: u64, _a5: u64) -> u64 {
+    match crate::endpoint::reply(id, client_id, msg) {
+        Ok(()) => 0,
+        Err(e) => e.as_u64(),
+    }
 }

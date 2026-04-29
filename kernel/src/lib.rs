@@ -7,7 +7,10 @@ pub mod boot_qemu_virt;
 #[cfg(all(target_arch = "aarch64", target_os = "none"))]
 pub mod console;
 
-#[cfg(all(target_arch = "aarch64", target_os = "none"))]
+#[cfg(any(all(target_arch = "aarch64", target_os = "none"), test))]
+pub mod endpoint;
+
+#[cfg(any(all(target_arch = "aarch64", target_os = "none"), test))]
 pub mod frame_alloc;
 
 #[cfg(all(target_arch = "aarch64", target_os = "none"))]
@@ -24,6 +27,8 @@ pub mod syscall;
 
 #[cfg(all(target_arch = "aarch64", target_os = "none"))]
 pub mod task;
+
+pub mod task_policy;
 
 #[cfg(all(target_arch = "aarch64", target_os = "none"))]
 pub mod timer;

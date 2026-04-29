@@ -23,6 +23,10 @@ use core::arch::asm;
 use core::arch::global_asm;
 use core::mem::size_of;
 
+use crate::task_policy::{
+    pick_next_index, sleep_wait_ticks, timer_tick_step, SchedState, TaskView, TimerSlot,
+};
+
 extern "C" {
     static __user_program_start: u8;
     static __user_program_end: u8;
@@ -484,25 +488,51 @@ pub fn current_id() -> TaskId {
 }
 
 unsafe fn pick_next_task() -> usize {
-    let current = CURRENT_TASK;
-    let current_running = TASK_TABLE[current].state == TaskState::Running;
-    let current_prio = TASK_TABLE[current].priority;
-
-    let mut best_idx: Option<usize> = None;
-    let mut best_prio: u8 = 255;
-
+    let mut view = [TaskView {
+        state: SchedState::Unused,
+        priority: 0,
+    }; MAX_TASKS];
     for i in 0..MAX_TASKS {
-        if TASK_TABLE[i].state == TaskState::Ready && TASK_TABLE[i].priority < best_prio {
-            best_prio = TASK_TABLE[i].priority;
-            best_idx = Some(i);
-        }
+        view[i] = TaskView {
+            state: task_state_to_sched(TASK_TABLE[i].state),
+            priority: TASK_TABLE[i].priority,
+        };
     }
+    pick_next_index(&view, CURRENT_TASK)
+}
 
-    match best_idx {
-        Some(_idx) if current_running && current_prio <= best_prio => current,
-        Some(idx) => idx,
-        None => 0,
+fn task_state_to_sched(s: TaskState) -> SchedState {
+    match s {
+        TaskState::Unused => SchedState::Unused,
+        TaskState::Ready => SchedState::Ready,
+        TaskState::Running => SchedState::Running,
+        TaskState::Blocked => SchedState::Blocked,
+        TaskState::Exited => SchedState::Exited,
     }
+}
+
+fn sched_to_task_state(s: SchedState) -> TaskState {
+    match s {
+        SchedState::Unused => TaskState::Unused,
+        SchedState::Ready => TaskState::Ready,
+        SchedState::Running => TaskState::Running,
+        SchedState::Blocked => TaskState::Blocked,
+        SchedState::Exited => TaskState::Exited,
+    }
+}
+
+fn timer_slot_from_task(t: &Task) -> TimerSlot {
+    TimerSlot {
+        state: task_state_to_sched(t.state),
+        time_slice: t.time_slice,
+        wake_tick: t.wake_tick,
+    }
+}
+
+fn apply_timer_slot_to_task(t: &mut Task, s: &TimerSlot) {
+    t.state = sched_to_task_state(s.state);
+    t.time_slice = s.time_slice;
+    t.wake_tick = s.wake_tick;
 }
 
 pub fn schedule() {
@@ -545,8 +575,7 @@ pub fn yield_now() {
 }
 
 pub fn sleep(ms: u64) {
-    let tick_ms = crate::timer::tick_ms();
-    let ticks = if tick_ms > 0 { ms / tick_ms } else { 1 }.max(1);
+    let ticks = sleep_wait_ticks(ms, crate::timer::tick_ms());
     unsafe {
         let wake_tick = crate::timer::tick_count() + ticks;
         TASK_TABLE[CURRENT_TASK].state = TaskState::Blocked;
@@ -579,23 +608,16 @@ pub fn unblock(id: TaskId) {
 pub fn tick() {
     unsafe {
         let current = CURRENT_TASK;
-        if TASK_TABLE[current].time_slice > 0 {
-            TASK_TABLE[current].time_slice -= 1;
-            if TASK_TABLE[current].time_slice == 0 {
-                NEED_RESCHEDULE = true;
-            }
-        }
-
         let now = crate::timer::tick_count();
+        let mut slots = [TimerSlot::ZERO; MAX_TASKS];
         for i in 0..MAX_TASKS {
-            if TASK_TABLE[i].state == TaskState::Blocked
-                && TASK_TABLE[i].wake_tick > 0
-                && now >= TASK_TABLE[i].wake_tick
-            {
-                TASK_TABLE[i].state = TaskState::Ready;
-                TASK_TABLE[i].wake_tick = 0;
-                NEED_RESCHEDULE = true;
-            }
+            slots[i] = timer_slot_from_task(&TASK_TABLE[i]);
+        }
+        if timer_tick_step(&mut slots, current, now) {
+            NEED_RESCHEDULE = true;
+        }
+        for i in 0..MAX_TASKS {
+            apply_timer_slot_to_task(&mut TASK_TABLE[i], &slots[i]);
         }
     }
 }

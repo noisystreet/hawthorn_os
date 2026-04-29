@@ -118,6 +118,41 @@ if ! rg -q '\[task D\] SYS_write\(bad ptr\) returned -14 \(expect -14 EFAULT\)' 
   exit 1
 fi
 
+if ! rg -q '\[task E\] endpoint_create returned [0-9]+' "${OUT}"; then
+  say "[hawthorn-el0] FAIL: missing task E endpoint_create success output"
+  say "[hawthorn-el0] captured text:"
+  cat "${OUT}" >&2 || true
+  exit 1
+fi
+
+if ! rg -q '\[task E\] endpoint_recv got client=[0-9]+ msg=42' "${OUT}"; then
+  say "[hawthorn-el0] FAIL: missing endpoint_recv rendezvous output (expect msg=42)"
+  say "[hawthorn-el0] captured text:"
+  cat "${OUT}" >&2 || true
+  exit 1
+fi
+
+if ! rg -q '\[task E\] endpoint_reply returned 0' "${OUT}"; then
+  say "[hawthorn-el0] FAIL: endpoint_reply should succeed with 0"
+  say "[hawthorn-el0] captured text:"
+  cat "${OUT}" >&2 || true
+  exit 1
+fi
+
+if ! rg -q '\[task D\] endpoint_call returned 43 \(expect 43\)' "${OUT}"; then
+  say "[hawthorn-el0] FAIL: endpoint_call should return reply 43"
+  say "[hawthorn-el0] captured text:"
+  cat "${OUT}" >&2 || true
+  exit 1
+fi
+
+if ! rg -q '\[task E\] endpoint_destroy returned 0' "${OUT}"; then
+  say "[hawthorn-el0] FAIL: endpoint_destroy should succeed with 0"
+  say "[hawthorn-el0] captured text:"
+  cat "${OUT}" >&2 || true
+  exit 1
+fi
+
 if ! rg -q '\[syscall\] task [0-9]+ exit\(0\)' "${OUT}"; then
   say "[hawthorn-el0] FAIL: missing EL0 sys_exit(0) log (expect [syscall] task N exit(0))"
   say "[hawthorn-el0] captured text:"

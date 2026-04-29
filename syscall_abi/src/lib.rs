@@ -27,6 +27,11 @@ pub const SYS_YIELD: u64 = 2;
 pub const SYS_GETPID: u64 = 3;
 pub const SYS_EXIT: u64 = 4;
 pub const SYS_SLEEP: u64 = 5;
+pub const SYS_ENDPOINT_CREATE: u64 = 6;
+pub const SYS_ENDPOINT_DESTROY: u64 = 7;
+pub const SYS_ENDPOINT_CALL: u64 = 8;
+pub const SYS_ENDPOINT_RECV: u64 = 9;
+pub const SYS_ENDPOINT_REPLY: u64 = 10;
 
 pub const MAX_ERRNO: u64 = 4095;
 
@@ -106,3 +111,42 @@ pub fn errno_from_ret(ret: u64) -> Option<Errno> {
 }
 
 pub const ABI_VERSION: u64 = 1;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn errno_as_u64_encodes_negative_for_errors() {
+        assert_eq!(Errno::Ok.as_u64(), 0);
+        assert_eq!(Errno::EPERM.as_u64(), (-1i64) as u64);
+        assert_eq!(Errno::EINVAL.as_u64(), (-22i64) as u64);
+        assert_eq!(Errno::ENOSYS.as_u64(), (-38i64) as u64);
+    }
+
+    #[test]
+    fn is_error_checks_boundaries() {
+        assert!(is_error((-1i64) as u64));
+        assert!(is_error((-4095i64) as u64));
+        assert!(!is_error((-4096i64) as u64));
+        assert!(!is_error(0));
+        assert!(!is_error(1));
+    }
+
+    #[test]
+    fn errno_from_ret_roundtrip_for_known_codes() {
+        let errs = [
+            Errno::EPERM,
+            Errno::ENOENT,
+            Errno::ENOMEM,
+            Errno::EINVAL,
+            Errno::ENOSYS,
+        ];
+        for err in errs {
+            let ret = err.as_u64();
+            assert_eq!(errno_from_ret(ret), Some(err));
+        }
+        assert_eq!(errno_from_ret((-999i64) as u64), None);
+        assert_eq!(errno_from_ret(0), None);
+    }
+}

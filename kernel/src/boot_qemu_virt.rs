@@ -183,6 +183,8 @@ pub extern "C" fn kernel_main() -> ! {
     crate::timer::init();
     // Initialize cooperative task scheduler.
     crate::task::init();
+    // Initialize endpoint table (IPC MVP step 1 lifecycle only).
+    crate::endpoint::init();
     // Initialize syscall dispatch table.
     crate::syscall::init();
     // Create demo tasks: task_d tests SVC syscall path from EL1.
@@ -251,12 +253,98 @@ pub extern "C" fn kernel_main() -> ! {
             bad_ret as i64
         );
 
+        let endpoint_id = 0u64;
+        crate::println!("[task D] using endpoint {}", endpoint_id);
+
+        let call_ret: u64;
+        unsafe {
+            asm!(
+                "mov x8, #8",
+                "mov x0, {id}",
+                "mov x1, #42",
+                "svc #0",
+                "mov {ret}, x0",
+                id = in(reg) endpoint_id,
+                ret = out(reg) call_ret,
+            );
+        }
+        crate::println!(
+            "[task D] endpoint_call returned {} (expect 43)",
+            call_ret as i64
+        );
+
         crate::println!("[task D] done");
+    }
+    extern "C" fn task_e() {
+        crate::println!("[task E] endpoint server start");
+
+        let endpoint_id: u64;
+        unsafe {
+            asm!(
+                "mov x8, #6",
+                "svc #0",
+                "mov {id}, x0",
+                id = out(reg) endpoint_id,
+            );
+        }
+        crate::println!("[task E] endpoint_create returned {}", endpoint_id);
+
+        let packed: u64;
+        unsafe {
+            asm!(
+                "mov x8, #9",
+                "mov x0, {id}",
+                "svc #0",
+                "mov {out}, x0",
+                id = in(reg) endpoint_id,
+                out = out(reg) packed,
+            );
+        }
+        let client_id = (packed >> 32) & 0xFFFF_FFFF;
+        let request = packed & 0xFFFF_FFFF;
+        crate::println!(
+            "[task E] endpoint_recv got client={} msg={}",
+            client_id,
+            request
+        );
+
+        let reply_ret: u64;
+        unsafe {
+            asm!(
+                "mov x8, #10",
+                "mov x0, {id}",
+                "mov x1, {client}",
+                "mov x2, {reply}",
+                "svc #0",
+                "mov {ret}, x0",
+                id = in(reg) endpoint_id,
+                client = in(reg) client_id,
+                reply = in(reg) (request + 1),
+                ret = out(reg) reply_ret,
+            );
+        }
+        crate::println!("[task E] endpoint_reply returned {}", reply_ret as i64);
+
+        let destroy_ret: u64;
+        unsafe {
+            asm!(
+                "mov x8, #7",
+                "mov x0, {id}",
+                "svc #0",
+                "mov {ret}, x0",
+                id = in(reg) endpoint_id,
+                ret = out(reg) destroy_ret,
+            );
+        }
+        crate::println!("[task E] endpoint_destroy returned {}", destroy_ret as i64);
+
+        crate::println!("[task E] done");
     }
     crate::task::create(task_a, 1);
     crate::task::create(task_b, 1);
+    crate::task::create(task_e, 1);
     crate::task::create(task_d, 1);
-    crate::println!("[task] created tasks A, B, D (syscall test)");
+    crate::println!("[task] created tasks A, B, D, E (syscall + endpoint test)");
 
     // Create EL0 user task: code at 0x1000, stack top at 0x8000.
     match crate::task::create_user(0x1000, 0x8000) {
