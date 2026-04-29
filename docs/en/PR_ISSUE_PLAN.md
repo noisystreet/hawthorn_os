@@ -122,3 +122,133 @@ M5 and M6 can proceed partially in parallel (SVC dispatch and address space desi
 - SMP multi-core support (AP startup, per-CPU data, IPI, load balancing)
 - RK3588 / Orange Pi 5 real hardware BSP
 - User-space driver services, root service init
+
+---
+
+## Status update (2026-04-29)
+
+- M4 (preemptive scheduling) ✅: time slicing, `sleep/block/unblock`, and IRQ-driven reschedule are wired.
+- M5 (SVC + syscalls) ✅: `syscall_abi` + dispatch table + `SYS_write/getpid/exit/sleep/yield` are working.
+- M6 (EL0 user mode) ✅: minimum runnable loop is working; QEMU serial shows `hello from EL0!`.
+- CI now includes two serial regressions:
+  - `scripts/verify_kernel_qemu_virt_serial.sh`
+  - `scripts/verify_kernel_qemu_virt_el0_serial.sh`
+
+> Note: current M6 is a runnable MVP; stronger isolation and lifecycle hardening are still pending (covered by the M7 split below).
+
+---
+
+## M7 two-week execution split (recommended)
+
+### Week 1 (stability + correctness)
+
+| Item | Goal | Acceptance criteria | Suggested issue |
+|------|------|---------------------|-----------------|
+| M7-W1-1 Full user-context save/restore | Complete EL0 trap context semantics (including GPR policy) | User task keeps running correctly across repeated syscalls + preemption | `#9-1` |
+| M7-W1-2 Exit + resource reclaim | Reclaim user pages/page tables/TCB resources on `sys_exit` | Repeated create/exit cycles show no obvious resource leak | `#9-2` |
+| M7-W1-3 User pointer validation baseline | Add minimal `copy_from_user` path for `sys_write` | Invalid user addresses return proper error instead of kernel fault | `#9-3` |
+| M7-W1-4 Regression hardening | Add EL0 syscall/exit checks in CI | CI remains stable, failures are diagnosable from logs | `#9-4` |
+
+### Week 2 (IPC MVP delivery)
+
+| Item | Goal | Acceptance criteria | Suggested issue |
+|------|------|---------------------|-----------------|
+| M7-W2-1 Endpoint object + cap binding | Introduce endpoint object and basic rights checks | Endpoint create/destroy and deny paths are testable | `#9-5` |
+| M7-W2-2 Synchronous short-message call/reply | Implement rendezvous IPC (<=128B) | Two user tasks complete a request/reply roundtrip | `#9-6` |
+| M7-W2-3 Blocking queue + scheduler interaction | `recv` blocks, `reply` wakes up | Queue order and wakeup semantics remain stable | `#9-7` |
+| M7-W2-4 Docs + ABI closure | Update `SYSCALL_ABI` / `KERNEL` / `TODO` | Docs and implementation are aligned, no stale interface notes | `#9-8` |
+
+### M7 Definition of Done
+
+1. At least two EL0 tasks can complete an end-to-end interaction via syscalls + IPC.
+2. User tasks can be created/exited with resource reclaim; repeated regressions show no leak signs.
+3. CI covers:
+   - kernel banner regression
+   - EL0 output regression
+   - EL0 syscall + IPC smoke regression
+
+---
+
+## Six-month roadmap (draft)
+
+### Scope boundaries
+
+- Platform track: stabilize QEMU `virt` (AArch64) first, then move to RK3588 hardware bring-up.
+- Architecture track: microkernel-first; keep drivers/services in user space whenever practical.
+- Delivery standard: each month must produce a milestone that is demoable, regression-testable, and measurable.
+
+### M+1 (Month 1): EL0 boundary hardening
+
+- **Focus**: move from “runs” to “runs reliably”.
+- **Deliverables**:
+  - close EL0 context save/restore semantics (including multi-task switch scenarios)
+  - user task lifecycle reclaim (`create/exit` for page tables/frames/TCB)
+  - minimal safe `copy_from_user` / `copy_to_user`
+  - EL0 syscall/exit stress regression scripts
+- **Acceptance**:
+  - 100+ repeated user task create/exit cycles without crashes
+  - stable CI (base serial + EL0 serial)
+
+### M+2 (Month 2): IPC MVP + service skeleton
+
+- **Focus**: synchronous short-message IPC lands.
+- **Deliverables**:
+  - endpoint object + capability rights checks
+  - rendezvous `call/reply` MVP (<=128B)
+  - stable scheduler integration for block/wakeup
+  - user-space service skeletons (init/name/driver template)
+- **Acceptance**:
+  - two EL0 processes complete request/reply roundtrip
+  - 1000 IPC roundtrips without deadlock
+
+### M+3 (Month 3): first usable device driver service
+
+- **Focus**: move from kernel-direct to user-space driver service.
+- **Deliverables**:
+  - at least one user-space driver service (UART service or timer-event service)
+  - minimal IRQ-to-user bridge path
+  - basic device capability model (minimal rights set)
+- **Acceptance**:
+  - driver service handles events/data stably
+  - service restart/recovery works after fault injection
+
+### M+4 (Month 4): block-device path
+
+- **Focus**: prerequisites for filesystem.
+- **Deliverables**:
+  - QEMU `virtio-blk` (or equivalent block device) MVP
+  - block read/write API + simple cache layer
+  - I/O timeout and error paths
+- **Acceptance**:
+  - stable block image read/write
+  - regression coverage for data consistency
+
+### M+5 (Month 5): filesystem MVP
+
+- **Focus**: usable file abstraction.
+- **Deliverables**:
+  - minimal VFS abstraction (inode/file/ops)
+  - first filesystem (RAMFS first, then simple disk-backed FS)
+  - minimal syscall semantics: `open/read/write/close`
+- **Acceptance**:
+  - EL0 programs can read/write files
+  - basic concurrent read/write paths stay stable
+
+### M+6 (Month 6): engineering hardening + board-readiness
+
+- **Focus**: from feature completeness to product engineering.
+- **Deliverables**:
+  - performance/stability baseline (boot latency, IPC latency, I/O throughput)
+  - fault-injection and recovery policy (service restart/timeout/retry)
+  - RK3588 bring-up blockers + minimal validation path
+  - frozen docs for ABI, IPC model, driver model, FS constraints
+- **Acceptance**:
+  - stable one-command regression workflow
+  - clear and actionable pre-hardware blocker list
+
+### Cross-cutting guardrails (all 6 months)
+
+- Every month enforces:
+  1. regression expansion (new capability must ship with script + CI coverage)
+  2. observability upgrades (logs, counters, error codes)
+  3. bilingual doc sync (CN/EN docs move with implementation)

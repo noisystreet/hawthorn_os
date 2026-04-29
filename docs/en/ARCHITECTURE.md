@@ -38,6 +38,29 @@ This document describes goals, layering, major subsystems, and roadmap for **Haw
 | Real-time over throughput | Scheduling and IPC **fast paths** bounded by worst-case latency (see KERNEL doc). |
 | Observable | Unified tracing, metrics, and crash hooks for field and lab use. |
 
+### 2.1 Advanced ideas worth adopting (delivery-oriented)
+
+1. **Capability-first security model**: object handles + least privilege, instead of identity/path-centric access.
+2. **User-space driver services**: keep mechanisms in kernel; move protocol/policy to restartable, isolated services.
+3. **IPC-first kernel interface**: prefer message/endpoint semantics and avoid syscall surface bloat.
+4. **Minimal TCB**: keep the trusted base small (scheduler, mapping, IPC, capability checks) for auditability.
+5. **Policy/mechanism split**: kernel provides mechanisms; policy stays in user services.
+6. **Explicit resource lifecycle**: every object must have create/use/revoke/reclaim semantics.
+7. **Determinism-first paths**: bound dynamic allocation and uncontrolled locks on critical paths.
+8. **Built-in structured observability**: design trace/metrics/error-codes with features, not after incidents.
+9. **ABI versioning from day one**: syscall/IPC protocols carry version and capability bits.
+10. **Progressive complexity**: deliver verifiable MVPs first, then scale scope.
+
+### 2.2 Existing OS limitations to avoid
+
+- **All drivers in kernel**: driver bugs widen blast radius to whole system failures.
+- **Excessive global mutable state**: concurrent behavior becomes hard to reason about.
+- **Fragmented permission model**: ACL/UID/namespace layering becomes difficult to audit.
+- **Syscall surface inflation**: interface maintenance and compatibility debt explode over time.
+- **Poor error recovery model**: recoverable faults escalate to node-level failures.
+- **No lifecycle closure**: handle/page-table/frame leaks appear in long-running systems.
+- **Observability added too late**: debugging and performance diagnosis become expensive.
+
 ### 2.5 Tier-1 platform (Orange Pi 5 / RK3588)
 
 | Item | Description |
