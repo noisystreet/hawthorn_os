@@ -38,6 +38,17 @@ jobs:
       - name: build (hawthorn_kernel qemu virt)
         run: cargo build -p hawthorn_kernel --features bare-metal --target aarch64-unknown-none
 
+      - name: install qemu test deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-arm socat
+
+      - name: verify (hawthorn_kernel qemu virt serial)
+        run: bash scripts/verify_kernel_qemu_virt_serial.sh
+
+      - name: verify (hawthorn_kernel qemu virt EL0 serial)
+        run: bash scripts/verify_kernel_qemu_virt_el0_serial.sh
+
       - name: clippy (qemu minimal, aarch64 bare-metal)
         run: cargo clippy -p hawthorn_qemu_minimal --features bare-metal --target aarch64-unknown-none -- -D warnings
 

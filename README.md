@@ -53,6 +53,11 @@ cargo build -p hawthorn_qemu_minimal --features bare-metal --target aarch64-unkn
 
 镜像烧录、链接脚本与 **QEMU 最小镜像**（[`scripts/run_qemu_minimal.sh`](scripts/run_qemu_minimal.sh)）见 [docs/PORTING.md](docs/PORTING.md)。
 
+`hawthorn_kernel` 串口回归脚本：
+
+- 基础启动回归：[`scripts/verify_kernel_qemu_virt_serial.sh`](scripts/verify_kernel_qemu_virt_serial.sh)
+- 含 EL0 用户态回归（需出现 `hello from EL0!`）：[`scripts/verify_kernel_qemu_virt_el0_serial.sh`](scripts/verify_kernel_qemu_virt_el0_serial.sh)
+
 ---
 
 ## 仓库规划（实现阶段）
