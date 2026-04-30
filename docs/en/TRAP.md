@@ -253,15 +253,19 @@ IRQ entry (assembly)
 
 ## 6. TrapFrame Struct
 
+The definition lives in **`kernel/src/trap_frame.rs`**, which is built on the host so `cargo test` can lock the layout against the **#272** / **`[sp, #256]`** / **`[sp, #264]`** contract in **`kernel/src/trap.rs`**.
+
 ```rust
 #[repr(C)]
-struct TrapFrame {
-    x: [u64; 31],   // x0–x30
-    sp_el0: u64,     // SP_EL0
+pub struct TrapFrame {
+    pub x: [u64; 31],   // x0–x30
+    pub sp_el0: u64,
+    pub elr_el1: u64,   // matches vector stub str/ldr +256
+    pub spsr_el1: u64, // matches vector stub str/ldr +264
 }
 ```
 
-Total size: 31 GPRs (`x0`–`x30`) × 8 + `sp_el0` + `elr_el1` + `spsr_el1` = 272 bytes, matching `sub sp, sp, #272` in assembly.
+Total size: **272** bytes. Public constants `TRAP_FRAME_SIZE` / `TRAP_FRAME_OFFSET_*` and unit tests are in `trap_frame.rs`.
 
 ---
 
@@ -327,14 +331,16 @@ In the vector table assembly, use `.section .text.vector, "ax"` + `.align 12` (4
 
 ```
 kernel/src/
-├── trap.rs             # pub fn init(), TrapFrame, ExceptionKind, handle_exception()
+├── trap_frame.rs       # TrapFrame layout + host unit tests (stub offsets)
+├── trap.rs             # init(), ExceptionKind, handle_exception(), vector global_asm
 ├── gic.rs              # GICv3 driver: Distributor / Redistributor / CPU Interface init
 ├── irq.rs              # IRQ dispatch framework: register / unregister / dispatch
 ├── boot_qemu_virt.rs   # kernel_main calls trap::init() → gic::init() → irq::init()
-└── lib.rs              # pub mod trap; pub mod gic; pub mod irq;
+└── lib.rs              # pub mod trap_frame; pub mod trap; pub mod gic; pub mod irq;
 ```
 
-- `trap/mod.rs`: Rust-side dispatch logic, `TrapFrame` definition, `ExceptionKind` enum. IRQ exceptions dispatch to `irq::dispatch()`.
+- `trap_frame.rs`: `TrapFrame` and stack layout constants; host `cargo test` enforces the §3.4 ELR/SPSR contract.
+- `trap.rs`: Rust dispatch, `ExceptionKind`, IRQ/sync paths; `global_asm!` vector table.
 - `gic.rs`: GICv3 driver (Distributor / Redistributor / CPU Interface initialization and interrupt enable/disable).
 - `irq.rs`: IRQ dispatch framework, maintains a 1020-slot handler table, provides `register` / `unregister` / `dispatch`.
 - `trap/vector.asm`: 16 vector slot assembly entries. Recommended to use Rust `global_asm!` macro inline to keep a single crate without extra `.S` files. If the assembly is long, split into `trap/vector.s` and compile via `build.rs`.

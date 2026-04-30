@@ -30,6 +30,9 @@ pub mod task;
 
 pub mod task_policy;
 
+/// Layout of the AArch64 trap frame; host-testable (see unit tests).
+pub mod trap_frame;
+
 #[cfg(all(target_arch = "aarch64", target_os = "none"))]
 pub mod timer;
 

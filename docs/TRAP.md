@@ -254,15 +254,19 @@ IRQ 入口 (汇编)
 
 ## 6. TrapFrame 结构体
 
+定义位于 **`kernel/src/trap_frame.rs`**（可在 host 上 `cargo test` 校验布局，与 **`kernel/src/trap.rs`** 向量桩中的 `#272` / `[sp, #256]` / `[sp, #264]` 保持一致）。
+
 ```rust
 #[repr(C)]
-struct TrapFrame {
-    x: [u64; 31],   // x0–x30
-    sp_el0: u64,     // SP_EL0
+pub struct TrapFrame {
+    pub x: [u64; 31],   // x0–x30
+    pub sp_el0: u64,
+    pub elr_el1: u64,   // 与向量桩 str/ldr +256 对应
+    pub spsr_el1: u64, // 与向量桩 str/ldr +264 对应
 }
 ```
 
-总大小：31 个 GPR（`x0`–`x30`）×8 + `sp_el0` + `elr_el1` + `spsr_el1` = 272 字节，与汇编中 `sub sp, sp, #272` 一致。
+总大小：**272** 字节；公开常量 `TRAP_FRAME_SIZE` / `TRAP_FRAME_OFFSET_*` 与单元测试见 `trap_frame.rs`。
 
 ---
 
@@ -328,14 +332,16 @@ pub fn init() {
 
 ```
 kernel/src/
-├── trap.rs             # pub fn init(), TrapFrame, ExceptionKind, handle_exception()
+├── trap_frame.rs       # TrapFrame 布局与 host 单元测试（与向量桩偏移一致）
+├── trap.rs             # init()、ExceptionKind、handle_exception()、向量表汇编
 ├── gic.rs              # GICv3 驱动：Distributor / Redistributor / CPU Interface 初始化
 ├── irq.rs              # IRQ 分发框架：register / unregister / dispatch
 ├── boot_qemu_virt.rs   # kernel_main 中调用 trap::init() → gic::init() → irq::init()
-└── lib.rs              # pub mod trap; pub mod gic; pub mod irq;
+└── lib.rs              # pub mod trap_frame; pub mod trap; pub mod gic; pub mod irq;
 ```
 
-- `trap/mod.rs`：Rust 侧的分发逻辑、`TrapFrame` 定义、`ExceptionKind` 枚举。IRQ 异常分发到 `irq::dispatch()`。
+- `trap_frame.rs`：`TrapFrame` 与栈布局常量；`cargo test` 在 host 上锁定 §3.4 中的 ELR/SPSR 契约。
+- `trap.rs`：Rust 侧分发、`ExceptionKind`、IRQ/sync 路径；`global_asm!` 向量表。
 - `gic.rs`：GICv3 驱动（Distributor / Redistributor / CPU Interface 初始化与中断使能/禁能）。
 - `irq.rs`：IRQ 分发框架，维护 1020 槽的处理函数表，提供 `register` / `unregister` / `dispatch`。
 - `trap/vector.asm`：16 个向量槽汇编入口。建议使用 Rust `global_asm!` 宏内联，保持单一 crate 无需额外 `.S` 文件。若汇编较长，可拆为 `trap/vector.s` 并在 `build.rs` 中编译。

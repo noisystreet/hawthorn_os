@@ -7,26 +7,16 @@
 //! saved into a [`TrapFrame`] on the kernel stack, then Rust
 //! [`handle_exception`] is called for dispatch.
 //!
+//! The [`TrapFrame`] type lives in [`crate::trap_frame`] so layout tests can
+//! run on the host without assembling AArch64 vectors.
+//!
 //! See `docs/TRAP.md` for the full design.
 
 use core::arch::asm;
 use core::arch::global_asm;
 
 use crate::boot_qemu_virt::{pl011_init, pl011_write_bytes};
-
-/// Saved general-purpose register state on exception entry.
-///
-/// Layout matches the vector stubs: 31 GPRs (x0–x30) + `sp_el0`, then
-/// `elr_el1` / `spsr_el1` captured on entry so `eret` can restore the correct
-/// return address after another task took an exception (ELR_EL1 is not
-/// per-thread). Total 272 bytes; see `sub sp, sp, #272` in assembly.
-#[repr(C)]
-pub struct TrapFrame {
-    x: [u64; 31],
-    sp_el0: u64,
-    elr_el1: u64,
-    spsr_el1: u64,
-}
+pub use crate::trap_frame::TrapFrame;
 
 /// Classification of the active vector slot passed to [`handle_exception`].
 #[repr(u64)]
