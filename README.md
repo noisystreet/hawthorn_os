@@ -1,5 +1,7 @@
 # 山楂
 
+> **[English](README.en.md)** — English README for international readers.
+
 面向 **机器人** 与 **智能硬件** 的嵌入式操作系统，以 **Rust** 实现，采用 **微内核** 架构。
 
 **中文名：山楂**；**英文代号：hawthorn**（Rust crate、`-p` 参数与文档简称；与「山楂」指同一项目）。  

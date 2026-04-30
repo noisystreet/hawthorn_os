@@ -1,6 +1,6 @@
 # AGENTS.md — Hawthorn (山楂) for coding agents
 
-This file orients **AI assistants, CI bots, and contributors** using agent-style workflows. Canonical human docs live under `docs/` (Chinese) and `docs/en/` (English mirrors).
+This file orients **AI assistants, CI bots, and contributors** using agent-style workflows. Canonical human docs live under `docs/` (Chinese) and `docs/en/` (English mirrors). **Repository overview:** root **`README.md`** (Chinese, default on GitHub) and **`README.en.md`** (English).
 
 ---
 
