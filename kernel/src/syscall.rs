@@ -12,11 +12,10 @@
 //! - x0  = return value (negative = Errno)
 
 use hawthorn_syscall_abi::{
-    Errno, SYS_ABI_INFO, SYS_ENDPOINT_CALL, SYS_ENDPOINT_CREATE, SYS_ENDPOINT_DESTROY,
-    SYS_ENDPOINT_RECV, SYS_ENDPOINT_REPLY, SYS_EXIT, SYS_GETPID, SYS_SLEEP, SYS_WRITE, SYS_YIELD,
+    Errno, SYSCALL_DISPATCH_TABLE_LEN, SYS_ABI_INFO, SYS_ENDPOINT_CALL, SYS_ENDPOINT_CREATE,
+    SYS_ENDPOINT_DESTROY, SYS_ENDPOINT_RECV, SYS_ENDPOINT_REPLY, SYS_EXIT, SYS_GETPID, SYS_READ,
+    SYS_SLEEP, SYS_WRITE, SYS_YIELD,
 };
-
-const MAX_SYSCALL: u64 = 64;
 const WRITE_CHUNK_SIZE: usize = 256;
 /// Identity RAM window (see `kernel/src/mm.rs` / `frame_alloc`).
 const KERNEL_RAM_START: usize = 0x4000_0000;
@@ -25,12 +24,13 @@ const KERNEL_RAM_END_EXCL: usize = 0x4800_0000;
 type SyscallHandler = fn(u64, u64, u64, u64, u64, u64) -> u64;
 
 #[allow(static_mut_refs)]
-static mut SYSCALL_TABLE: [Option<SyscallHandler>; MAX_SYSCALL as usize] =
-    [None; MAX_SYSCALL as usize];
+static mut SYSCALL_TABLE: [Option<SyscallHandler>; SYSCALL_DISPATCH_TABLE_LEN] =
+    [None; SYSCALL_DISPATCH_TABLE_LEN];
 
 pub fn init() {
     unsafe {
         SYSCALL_TABLE[SYS_WRITE as usize] = Some(sys_write);
+        SYSCALL_TABLE[SYS_READ as usize] = Some(sys_read);
         SYSCALL_TABLE[SYS_YIELD as usize] = Some(sys_yield);
         SYSCALL_TABLE[SYS_GETPID as usize] = Some(sys_getpid);
         SYSCALL_TABLE[SYS_EXIT as usize] = Some(sys_exit);
@@ -45,7 +45,7 @@ pub fn init() {
 }
 
 pub fn dispatch(nr: u64, a0: u64, a1: u64, a2: u64, a3: u64, a4: u64, a5: u64) -> u64 {
-    if nr >= MAX_SYSCALL {
+    if nr >= SYSCALL_DISPATCH_TABLE_LEN as u64 {
         return Errno::ENOSYS.as_u64();
     }
 
@@ -55,6 +55,10 @@ pub fn dispatch(nr: u64, a0: u64, a1: u64, a2: u64, a3: u64, a4: u64, a5: u64) -
         Some(h) => h(a0, a1, a2, a3, a4, a5),
         None => Errno::ENOSYS.as_u64(),
     }
+}
+
+fn sys_read(_fd: u64, _buf: u64, _len: u64, _a3: u64, _a4: u64, _a5: u64) -> u64 {
+    Errno::ENOSYS.as_u64()
 }
 
 fn sys_write(fd: u64, buf: u64, len: u64, _a3: u64, _a4: u64, _a5: u64) -> u64 {

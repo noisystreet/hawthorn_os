@@ -112,18 +112,18 @@ This page lists **new runtime features and capabilities** planned for the repo. 
 
 ### ABI versioning and numbering
 
-- [ ] In [系统调用ABI.md](../系统调用ABI.md): **number space**, **DRAFT-x.y**, and **STABLE-x** naming.
-- [ ] **Register convention**: args in `x0–x7`, syscall number in `x8`, `ret`/`errno` model; differences vs AArch64 PCS explained.
-- [ ] **Version probe syscall**: returns `ABI_VERSION` and a feature bitmask (may be all zero at first).
+- [x] In [SYSCALL_ABI.md](./SYSCALL_ABI.md) / [系统调用ABI.md](../系统调用ABI.md): **number space**, **DRAFT-x.y**, and **STABLE-x** naming (current **DRAFT-1.0**, `ABI_VERSION = 1`).
+- [x] **Register convention**: **`SVC #0`**, syscall number in **`x8`**, args **`x0–x5`**, return / **negative errno** in **`x0`**; see [SYSCALL_ABI.md](./SYSCALL_ABI.md) §2.
+- [x] **Version probe syscall**: `SYS_ABI_INFO` / `abi_info_word()` and `ABI_CAP_*` (see [SYSCALL_ABI.md](./SYSCALL_ABI.md) §3).
 
 ### `syscall_abi` crate
 
-- [ ] Constants: `SYS_*` numbers, `MAX_ARGS`, error enum and `From<u64>`.
+- [x] Constants: `SYS_*`, `SYSCALL_MAX_ARGS`, `SYSCALL_NR_CORE_MAX`, `SYSCALL_DISPATCH_TABLE_LEN`, `Errno` + `errno_from_ret` (full `From<u64>` enum coverage later if needed).
 - [ ] **User-side wrappers** (optional sub-crate): inline asm or `no_std`-friendly stubs.
 
 ### Trap and return
 
-- [ ] **SVC dispatcher**: one kernel entry; illegal number → `ENOSYS`.
+- [x] **SVC dispatcher**: `syscall::dispatch`; illegal / unimplemented → `ENOSYS`.
 - [ ] **User stack and TLS**: `TPIDR_EL0` or equivalent; init on thread create.
 - [ ] **Trampoline**: restore **PSTATE / SP_EL0 / ELR_EL1** when returning to user mode.
 

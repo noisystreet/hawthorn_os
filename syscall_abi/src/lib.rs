@@ -2,7 +2,17 @@
 
 //! Hawthorn syscall ABI — constants and types shared by kernel and user space.
 //!
+//! ## Stability label (human-facing)
+//!
+//! The book uses **DRAFT-1.0** together with numeric [`ABI_VERSION`]. When the
+//! interface is promoted, docs will add a **STABLE-x** line; bump [`ABI_VERSION`]
+//! on any **breaking** change to syscall numbers, argument layouts, or error rules.
+//!
 //! ## Register convention (AArch64)
+//!
+//! From **EL0** or **EL1**: issue **`SVC #0`**; the syscall number is passed in
+//! **`x8`**, arguments in **`x0`–`x5`** (up to six words). Return value in **`x0`**.
+//! (Immediate value is unused for dispatch, matching the common Linux-aarch64 pattern.)
 //!
 //! | Register | Role                          |
 //! |----------|-------------------------------|
@@ -14,10 +24,15 @@
 //! `-(MAX_ERRNO)..0` (i.e. `-4095..-1`), it is an error code and
 //! `x0` should be interpreted as a negative `Errno`.
 //!
-//! ## Syscall numbers
+//! ## Syscall number space
 //!
-//! Numbers 0–63 are reserved for the kernel core. 64–255 are reserved
-//! for future expansion. 256+ are dynamically assigned.
+//! | Range | Meaning |
+//! |-------|---------|
+//! | `0..=SYSCALL_NR_CORE_MAX` (63) | **Kernel core** — fixed table in `hawthorn_kernel::syscall` |
+//! | `64..=255` | **Reserved** for future fixed syscalls |
+//! | `256..` | **Reserved** for dynamic or out-of-band assignment (policy TBD) |
+//!
+//! Any unimplemented number in the core table returns [`Errno::ENOSYS`].
 //!
 //! ## `SYS_ABI_INFO` return value
 //!
@@ -25,6 +40,18 @@
 //! This is a **non-negative** word (not an [`Errno`] encoding).
 
 #![cfg_attr(not(test), no_std)]
+
+/// Human-readable ABI draft label (keep in sync with book `docs/系统调用ABI.md`).
+pub const ABI_DRAFT_LABEL: &str = "DRAFT-1.0";
+
+/// Bump this when syscall layout or semantics change incompatibly; keep book in sync.
+pub const ABI_VERSION: u64 = 1;
+
+/// Last syscall **number** (`inclusive`) reserved for the kernel core fixed table.
+pub const SYSCALL_NR_CORE_MAX: u64 = 63;
+
+/// Dispatch table length used by the kernel (`nr` must be `<` this for fast lookup).
+pub const SYSCALL_DISPATCH_TABLE_LEN: usize = (SYSCALL_NR_CORE_MAX as usize) + 1;
 
 pub const SYS_WRITE: u64 = 0;
 pub const SYS_READ: u64 = 1;
@@ -39,6 +66,9 @@ pub const SYS_ENDPOINT_RECV: u64 = 9;
 pub const SYS_ENDPOINT_REPLY: u64 = 10;
 /// [`SYS_ABI_INFO`] packs [`ABI_VERSION`] (low 32) and capability bits (high 32); see [`abi_info_word`].
 pub const SYS_ABI_INFO: u64 = 11;
+
+/// Maximum number of scalar arguments passed in registers for this ABI (`x0`–`x5`).
+pub const SYSCALL_MAX_ARGS: usize = 6;
 
 pub const MAX_ERRNO: u64 = 4095;
 
@@ -117,8 +147,6 @@ pub fn errno_from_ret(ret: u64) -> Option<Errno> {
     }
 }
 
-pub const ABI_VERSION: u64 = 1;
-
 /// Kernel exposes per-task EL0 page tables + user-pointer validation for the low fixed window.
 pub const ABI_CAP_EL0_USER_AS: u64 = 1 << 0;
 
@@ -135,6 +163,16 @@ mod tests {
     #[test]
     fn abi_info_syscall_number_reserved() {
         assert_eq!(SYS_ABI_INFO, 11);
+    }
+
+    #[test]
+    fn dispatch_table_len_matches_core_range() {
+        assert_eq!(SYSCALL_DISPATCH_TABLE_LEN, SYSCALL_NR_CORE_MAX as usize + 1);
+    }
+
+    #[test]
+    fn abi_draft_label_non_empty() {
+        assert!(!ABI_DRAFT_LABEL.is_empty());
     }
 
     #[test]
