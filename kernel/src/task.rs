@@ -34,7 +34,7 @@ extern "C" {
 
 const MAX_TASKS: usize = 8;
 
-const STACK_SIZE: usize = 4096;
+const STACK_SIZE: usize = 16384;
 const MAX_USER_OWNED_FRAMES: usize = 16;
 
 const DEFAULT_TIME_SLICE: u64 = 10;
@@ -196,6 +196,8 @@ pub fn init() {
 pub fn create(entry: extern "C" fn(), priority: u8) -> Option<TaskId> {
     unsafe {
         let mut idx = None;
+        // Index `TASK_TABLE` directly: `static mut` + `.iter()` hits `static_mut_refs` under `-D warnings`.
+        #[allow(clippy::needless_range_loop)]
         for i in 1..MAX_TASKS {
             if TASK_TABLE[i].state == TaskState::Unused {
                 idx = Some(i);
@@ -228,8 +230,8 @@ pub fn create(entry: extern "C" fn(), priority: u8) -> Option<TaskId> {
             saved_spsr: 0,
             saved_sp_el0: 0,
         };
-        for slot in 0..MAX_USER_OWNED_FRAMES {
-            USER_OWNED_FRAMES[idx][slot] = 0;
+        for frame_slot in USER_OWNED_FRAMES[idx].iter_mut() {
+            *frame_slot = 0;
         }
         USER_OWNED_FRAME_COUNTS[idx] = 0;
 
@@ -250,6 +252,7 @@ pub fn create_user(entry: usize, stack_top: usize) -> Option<TaskId> {
     unsafe {
         // Find a free task slot
         let mut idx = None;
+        #[allow(clippy::needless_range_loop)]
         for i in 1..MAX_TASKS {
             if TASK_TABLE[i].state == TaskState::Unused {
                 idx = Some(i);
@@ -280,9 +283,9 @@ pub fn create_user(entry: usize, stack_top: usize) -> Option<TaskId> {
         let user_prog_start = core::ptr::addr_of!(__user_program_start) as usize;
         let user_prog_end = core::ptr::addr_of!(__user_program_end) as usize;
         let user_prog_size = user_prog_end.saturating_sub(user_prog_start);
-        let pages_needed = (user_prog_size + 4095) / 4096;
-        for slot in 0..MAX_USER_OWNED_FRAMES {
-            USER_OWNED_FRAMES[idx][slot] = 0;
+        let pages_needed = user_prog_size.div_ceil(4096);
+        for frame_slot in USER_OWNED_FRAMES[idx].iter_mut() {
+            *frame_slot = 0;
         }
         USER_OWNED_FRAME_COUNTS[idx] = 0;
         if pages_needed + 1 > MAX_USER_OWNED_FRAMES {
@@ -375,15 +378,14 @@ pub fn exit_current() -> ! {
 
 fn cleanup_user_allocation(task_idx: usize, user_pt: usize) {
     let count = unsafe { USER_OWNED_FRAME_COUNTS[task_idx] };
-    for i in 0..count {
-        let frame = unsafe { USER_OWNED_FRAMES[task_idx][i] };
-        if frame != 0 {
-            crate::frame_alloc::free_frame(frame);
-        }
-    }
     unsafe {
-        for slot in 0..MAX_USER_OWNED_FRAMES {
-            USER_OWNED_FRAMES[task_idx][slot] = 0;
+        for frame in USER_OWNED_FRAMES[task_idx].iter().take(count) {
+            if *frame != 0 {
+                crate::frame_alloc::free_frame(*frame);
+            }
+        }
+        for frame_slot in USER_OWNED_FRAMES[task_idx].iter_mut() {
+            *frame_slot = 0;
         }
         USER_OWNED_FRAME_COUNTS[task_idx] = 0;
     }
@@ -398,15 +400,14 @@ fn release_task_resources(task_idx: usize) {
     let released_frames = unsafe { USER_OWNED_FRAME_COUNTS[task_idx] };
     let released_pt = task.user_page_table;
 
-    for i in 0..released_frames {
-        let frame = unsafe { USER_OWNED_FRAMES[task_idx][i] };
-        if frame != 0 {
-            crate::frame_alloc::free_frame(frame);
-        }
-    }
     unsafe {
-        for slot in 0..MAX_USER_OWNED_FRAMES {
-            USER_OWNED_FRAMES[task_idx][slot] = 0;
+        for frame in USER_OWNED_FRAMES[task_idx].iter().take(released_frames) {
+            if *frame != 0 {
+                crate::frame_alloc::free_frame(*frame);
+            }
+        }
+        for frame_slot in USER_OWNED_FRAMES[task_idx].iter_mut() {
+            *frame_slot = 0;
         }
         USER_OWNED_FRAME_COUNTS[task_idx] = 0;
     }
@@ -539,11 +540,22 @@ pub fn schedule() {
     unsafe {
         let current = CURRENT_TASK;
         let next = pick_next_task();
+        let cur_id = TASK_TABLE[current].id.0;
+        let next_id = TASK_TABLE[next].id.0;
 
         if next == current && TASK_TABLE[current].state == TaskState::Running {
             TASK_TABLE[current].time_slice = DEFAULT_TIME_SLICE;
+            crate::println!("[task] schedule: {} => same ({})", cur_id, cur_id);
             return;
         }
+
+        crate::println!(
+            "[task] schedule: {} (state={}) => {} (state={})",
+            cur_id,
+            TASK_TABLE[current].state as u8,
+            next_id,
+            TASK_TABLE[next].state as u8
+        );
 
         if TASK_TABLE[current].state == TaskState::Running {
             TASK_TABLE[current].state = TaskState::Ready;
@@ -557,8 +569,6 @@ pub fn schedule() {
         asm!("mrs {}, daif", out(reg) daif);
         TASK_TABLE[current].daif = daif;
 
-        // Always switch via context_switch so the current task's kernel stack pointer
-        // is saved in TASK_TABLE[current].sp before any user-mode transition.
         context_switch(&mut TASK_TABLE[current].sp, &TASK_TABLE[next].sp);
 
         asm!("msr daif, {}", in(reg) TASK_TABLE[CURRENT_TASK].daif);
@@ -586,6 +596,7 @@ pub fn sleep(ms: u64) {
 
 pub fn block() {
     unsafe {
+        crate::println!("[task] block task {}", TASK_TABLE[CURRENT_TASK].id.0);
         TASK_TABLE[CURRENT_TASK].state = TaskState::Blocked;
         schedule();
     }
@@ -593,6 +604,9 @@ pub fn block() {
 
 pub fn unblock(id: TaskId) {
     let idx = id.0 as usize;
+    crate::println!("[task] unblock task {} (currently {})", id.0, unsafe {
+        TASK_TABLE[id.0 as usize].state as u8
+    });
     if idx == 0 || idx >= MAX_TASKS {
         return;
     }
@@ -601,6 +615,13 @@ pub fn unblock(id: TaskId) {
             TASK_TABLE[idx].state = TaskState::Ready;
             TASK_TABLE[idx].wake_tick = 0;
             NEED_RESCHEDULE = true;
+            crate::println!("[task] unblock task {} -> Ready", id.0);
+        } else {
+            crate::println!(
+                "[task] unblock task {} not Blocked (state={})",
+                id.0,
+                TASK_TABLE[idx].state as u8
+            );
         }
     }
 }

@@ -16,12 +16,16 @@ use crate::boot_qemu_virt::{pl011_init, pl011_write_bytes};
 
 /// Saved general-purpose register state on exception entry.
 ///
-/// 31 registers (x0–x30) + SP_EL0 = 32 × 8 = 256 bytes, matching the
-/// `sub sp, sp, #256` in the vector table assembly.
+/// Layout matches the vector stubs: 31 GPRs (x0–x30) + `sp_el0`, then
+/// `elr_el1` / `spsr_el1` captured on entry so `eret` can restore the correct
+/// return address after another task took an exception (ELR_EL1 is not
+/// per-thread). Total 272 bytes; see `sub sp, sp, #272` in assembly.
 #[repr(C)]
 pub struct TrapFrame {
     x: [u64; 31],
     sp_el0: u64,
+    elr_el1: u64,
+    spsr_el1: u64,
 }
 
 /// Classification of the active vector slot passed to [`handle_exception`].
@@ -106,7 +110,7 @@ global_asm!(
     // ---- EL1 Sync (SPx) @ 0x200 ----
     ".align 4",
     "el1_sync_spx:",
-    "sub sp, sp, #256",
+    "sub sp, sp, #272",
     "stp x0, x1,   [sp, #0]",
     "stp x2, x3,   [sp, #16]",
     "stp x4, x5,   [sp, #32]",
@@ -128,10 +132,17 @@ global_asm!(
     "mov x0, #0",
     "mrs x3, elr_el1",
     "mrs x4, spsr_el1",
+    "str x3,       [sp, #256]",
+    "str x4,       [sp, #264]",
     "mov x2, sp",
+    "mov x1, #0",
     "bl handle_exception",
     "ldr x0, [sp, #248]",
     "msr sp_el0, x0",
+    "ldr x9,       [sp, #256]",
+    "msr elr_el1, x9",
+    "ldr x9,       [sp, #264]",
+    "msr spsr_el1, x9",
     "ldp x0, x1,   [sp, #0]",
     "ldp x2, x3,   [sp, #16]",
     "ldp x4, x5,   [sp, #32]",
@@ -148,12 +159,12 @@ global_asm!(
     "ldp x26, x27, [sp, #208]",
     "ldp x28, x29, [sp, #224]",
     "ldr x30,      [sp, #240]",
-    "add sp, sp, #256",
+    "add sp, sp, #272",
     "eret",
     // ---- EL1 IRQ (SPx) @ 0x280 ----
     ".align 4",
     "el1_irq_spx:",
-    "sub sp, sp, #256",
+    "sub sp, sp, #272",
     "stp x0, x1,   [sp, #0]",
     "stp x2, x3,   [sp, #16]",
     "stp x4, x5,   [sp, #32]",
@@ -175,10 +186,17 @@ global_asm!(
     "mov x0, #1",
     "mrs x3, elr_el1",
     "mrs x4, spsr_el1",
+    "str x3,       [sp, #256]",
+    "str x4,       [sp, #264]",
     "mov x2, sp",
+    "mov x1, #0",
     "bl handle_exception",
     "ldr x0, [sp, #248]",
     "msr sp_el0, x0",
+    "ldr x9,       [sp, #256]",
+    "msr elr_el1, x9",
+    "ldr x9,       [sp, #264]",
+    "msr spsr_el1, x9",
     "ldp x0, x1,   [sp, #0]",
     "ldp x2, x3,   [sp, #16]",
     "ldp x4, x5,   [sp, #32]",
@@ -195,12 +213,12 @@ global_asm!(
     "ldp x26, x27, [sp, #208]",
     "ldp x28, x29, [sp, #224]",
     "ldr x30,      [sp, #240]",
-    "add sp, sp, #256",
+    "add sp, sp, #272",
     "eret",
     // ---- EL1 SError (SPx) @ 0x380 ----
     ".align 4",
     "el1_serror_spx:",
-    "sub sp, sp, #256",
+    "sub sp, sp, #272",
     "stp x0, x1,   [sp, #0]",
     "stp x2, x3,   [sp, #16]",
     "stp x4, x5,   [sp, #32]",
@@ -222,10 +240,17 @@ global_asm!(
     "mov x0, #3",
     "mrs x3, elr_el1",
     "mrs x4, spsr_el1",
+    "str x3,       [sp, #256]",
+    "str x4,       [sp, #264]",
     "mov x2, sp",
+    "mov x1, #0",
     "bl handle_exception",
     "ldr x0, [sp, #248]",
     "msr sp_el0, x0",
+    "ldr x9,       [sp, #256]",
+    "msr elr_el1, x9",
+    "ldr x9,       [sp, #264]",
+    "msr spsr_el1, x9",
     "ldp x0, x1,   [sp, #0]",
     "ldp x2, x3,   [sp, #16]",
     "ldp x4, x5,   [sp, #32]",
@@ -242,12 +267,12 @@ global_asm!(
     "ldp x26, x27, [sp, #208]",
     "ldp x28, x29, [sp, #224]",
     "ldr x30,      [sp, #240]",
-    "add sp, sp, #256",
+    "add sp, sp, #272",
     "eret",
     // ---- EL0 Sync (AArch64) @ 0x400 ----
     ".align 4",
     "el0_sync_a64:",
-    "sub sp, sp, #256",
+    "sub sp, sp, #272",
     "stp x0, x1,   [sp, #0]",
     "stp x2, x3,   [sp, #16]",
     "stp x4, x5,   [sp, #32]",
@@ -269,10 +294,17 @@ global_asm!(
     "mov x0, #4",
     "mrs x3, elr_el1",
     "mrs x4, spsr_el1",
+    "str x3,       [sp, #256]",
+    "str x4,       [sp, #264]",
     "mov x2, sp",
+    "mov x1, #0",
     "bl handle_exception",
     "ldr x0, [sp, #248]",
     "msr sp_el0, x0",
+    "ldr x9,       [sp, #256]",
+    "msr elr_el1, x9",
+    "ldr x9,       [sp, #264]",
+    "msr spsr_el1, x9",
     "ldp x0, x1,   [sp, #0]",
     "ldp x2, x3,   [sp, #16]",
     "ldp x4, x5,   [sp, #32]",
@@ -289,12 +321,12 @@ global_asm!(
     "ldp x26, x27, [sp, #208]",
     "ldp x28, x29, [sp, #224]",
     "ldr x30,      [sp, #240]",
-    "add sp, sp, #256",
+    "add sp, sp, #272",
     "eret",
     // ---- EL0 IRQ (AArch64) @ 0x480 ----
     ".align 4",
     "el0_irq_a64:",
-    "sub sp, sp, #256",
+    "sub sp, sp, #272",
     "stp x0, x1,   [sp, #0]",
     "stp x2, x3,   [sp, #16]",
     "stp x4, x5,   [sp, #32]",
@@ -316,10 +348,17 @@ global_asm!(
     "mov x0, #5",
     "mrs x3, elr_el1",
     "mrs x4, spsr_el1",
+    "str x3,       [sp, #256]",
+    "str x4,       [sp, #264]",
     "mov x2, sp",
+    "mov x1, #0",
     "bl handle_exception",
     "ldr x0, [sp, #248]",
     "msr sp_el0, x0",
+    "ldr x9,       [sp, #256]",
+    "msr elr_el1, x9",
+    "ldr x9,       [sp, #264]",
+    "msr spsr_el1, x9",
     "ldp x0, x1,   [sp, #0]",
     "ldp x2, x3,   [sp, #16]",
     "ldp x4, x5,   [sp, #32]",
@@ -336,12 +375,12 @@ global_asm!(
     "ldp x26, x27, [sp, #208]",
     "ldp x28, x29, [sp, #224]",
     "ldr x30,      [sp, #240]",
-    "add sp, sp, #256",
+    "add sp, sp, #272",
     "eret",
     // ---- EL0 SError (AArch64) @ 0x580 ----
     ".align 4",
     "el0_serror_a64:",
-    "sub sp, sp, #256",
+    "sub sp, sp, #272",
     "stp x0, x1,   [sp, #0]",
     "stp x2, x3,   [sp, #16]",
     "stp x4, x5,   [sp, #32]",
@@ -363,10 +402,17 @@ global_asm!(
     "mov x0, #7",
     "mrs x3, elr_el1",
     "mrs x4, spsr_el1",
+    "str x3,       [sp, #256]",
+    "str x4,       [sp, #264]",
     "mov x2, sp",
+    "mov x1, #0",
     "bl handle_exception",
     "ldr x0, [sp, #248]",
     "msr sp_el0, x0",
+    "ldr x9,       [sp, #256]",
+    "msr elr_el1, x9",
+    "ldr x9,       [sp, #264]",
+    "msr spsr_el1, x9",
     "ldp x0, x1,   [sp, #0]",
     "ldp x2, x3,   [sp, #16]",
     "ldp x4, x5,   [sp, #32]",
@@ -383,7 +429,7 @@ global_asm!(
     "ldp x26, x27, [sp, #208]",
     "ldp x28, x29, [sp, #224]",
     "ldr x30,      [sp, #240]",
-    "add sp, sp, #256",
+    "add sp, sp, #272",
     "eret",
 );
 
@@ -463,6 +509,53 @@ global_asm!(
     // Eret to EL0
     "eret",
 );
+
+/// EL1 syscall path in its own stack frame so `trap_frame` survives `dispatch()`
+/// (which may block/reschedule) without relying on a spill slot in the large
+/// `handle_exception` frame — that slot could be clobbered across deep calls.
+#[inline(never)]
+unsafe fn handle_el1_syscall(_trap_frame: *mut TrapFrame) {
+    unsafe {
+        asm!("msr daifset, #0xf; isb", options(nomem, nostack));
+    }
+    let nr = unsafe { (*_trap_frame).x[8] };
+    let a0 = unsafe { (*_trap_frame).x[0] };
+    let a1 = unsafe { (*_trap_frame).x[1] };
+    let a2 = unsafe { (*_trap_frame).x[2] };
+    let a3 = unsafe { (*_trap_frame).x[3] };
+    let a4 = unsafe { (*_trap_frame).x[4] };
+    let a5 = unsafe { (*_trap_frame).x[5] };
+
+    let ret = crate::syscall::dispatch(nr, a0, a1, a2, a3, a4, a5);
+
+    unsafe {
+        (*_trap_frame).x[0] = ret;
+    }
+}
+
+/// EL0 syscall path — same isolation as [`handle_el1_syscall`].
+#[inline(never)]
+unsafe fn handle_el0_syscall(_trap_frame: *mut TrapFrame, is_user: bool) {
+    unsafe {
+        asm!("msr daifset, #0xf; isb", options(nomem, nostack));
+    }
+    let nr = unsafe { (*_trap_frame).x[8] };
+    let a0 = unsafe { (*_trap_frame).x[0] };
+    let a1 = unsafe { (*_trap_frame).x[1] };
+    let a2 = unsafe { (*_trap_frame).x[2] };
+    let a3 = unsafe { (*_trap_frame).x[3] };
+    let a4 = unsafe { (*_trap_frame).x[4] };
+    let a5 = unsafe { (*_trap_frame).x[5] };
+
+    let ret = crate::syscall::dispatch(nr, a0, a1, a2, a3, a4, a5);
+
+    unsafe {
+        (*_trap_frame).x[0] = ret;
+    }
+    if is_user {
+        restore_el0_return_context_from_current_task();
+    }
+}
 
 fn read_esr() -> u64 {
     let esr: u64;
@@ -558,7 +651,7 @@ unsafe extern "C" fn handle_exception(
             }
         }
         Ok(ExceptionKind::El0SyncA64) => {
-            // Save user state before handling syscall
+            // Save user state before handling syscall or dumping an EL0 fault.
             if is_user {
                 crate::task::set_current_saved_context(elr, spsr, read_sp_el0());
             }
@@ -566,22 +659,11 @@ unsafe extern "C" fn handle_exception(
             let esr = read_esr();
             let ec = (esr >> 26) & 0x3F;
             if ec == 0x15 {
-                let trap_frame = _trap_frame as *mut TrapFrame;
-                let nr = unsafe { (*trap_frame).x[8] };
-                let a0 = unsafe { (*trap_frame).x[0] };
-                let a1 = unsafe { (*trap_frame).x[1] };
-                let a2 = unsafe { (*trap_frame).x[2] };
-                let a3 = unsafe { (*trap_frame).x[3] };
-                let a4 = unsafe { (*trap_frame).x[4] };
-                let a5 = unsafe { (*trap_frame).x[5] };
-
-                let ret = crate::syscall::dispatch(nr, a0, a1, a2, a3, a4, a5);
-
+                // Syscall handling is isolated in `handle_el0_syscall` so the trap-frame pointer
+                // is not kept only in a spill slot of this large function (see module comment on
+                // `handle_el1_syscall`).
                 unsafe {
-                    (*trap_frame).x[0] = ret;
-                }
-                if crate::task::current_is_user() {
-                    restore_el0_return_context_from_current_task();
+                    handle_el0_syscall(_trap_frame, is_user);
                 }
             } else {
                 dump_exception(kind.unwrap(), elr, spsr);
@@ -594,19 +676,8 @@ unsafe extern "C" fn handle_exception(
             let esr = read_esr();
             let ec = (esr >> 26) & 0x3F;
             if ec == 0x15 {
-                let trap_frame = _trap_frame as *mut TrapFrame;
-                let nr = unsafe { (*trap_frame).x[8] };
-                let a0 = unsafe { (*trap_frame).x[0] };
-                let a1 = unsafe { (*trap_frame).x[1] };
-                let a2 = unsafe { (*trap_frame).x[2] };
-                let a3 = unsafe { (*trap_frame).x[3] };
-                let a4 = unsafe { (*trap_frame).x[4] };
-                let a5 = unsafe { (*trap_frame).x[5] };
-
-                let ret = crate::syscall::dispatch(nr, a0, a1, a2, a3, a4, a5);
-
                 unsafe {
-                    (*trap_frame).x[0] = ret;
+                    handle_el1_syscall(_trap_frame);
                 }
             } else {
                 dump_exception(kind.unwrap(), elr, spsr);

@@ -63,22 +63,23 @@ Remaining slots (EL0 SP0 group, AArch32 group) jump to a **generic exception stu
 
 ### 3.1 Saved Contents
 
-On exception entry, hardware automatically saves `ELR_EL1` and `SPSR_EL1` (old PSTATE) into system registers. Software must save general-purpose registers `x0`–`x30` + `SP_EL0`, totaling 32 × 64-bit values.
+On exception entry, hardware writes the return address to `ELR_EL1` and the old `PSTATE` to `SPSR_EL1`, but those are **global** system registers. If syscall handling blocks and another thread runs, that thread’s exception overwrites `ELR_EL1`. When the original thread later restores GPRs from its trap frame and `eret`s, using whatever is then in `ELR_EL1` **without** restoring from that frame would branch to the **wrong** PC. Vector stubs therefore **also** save this exception’s `ELR_EL1` / `SPSR_EL1` on the stack, and on return **`msr` them from that copy before** `ldp` restores x0–x30, then `add sp` / `eret`.
 
-**Trap Frame layout** (grows from high to low address, stack-top aligned):
+Software saves GPRs `x0`–`x30` + `SP_EL0`, plus those two fields, for **272** bytes total (`sub sp, sp, #272`).
+
+**Trap Frame layout** (grows downward; `sp` points at frame base):
 
 ```
-┌──────────────────┐ ← high address (stack bottom)
+┌──────────────────┐
+│   SPSR_EL1       │  offset +264
+│   ELR_EL1        │  offset +256
 │   SP_EL0         │  offset +248
 │   x30 (LR)       │  offset +240
 │   x29 (FP)       │  offset +232
 │   x28            │  offset +224
 │   ...            │
 │   x1             │  offset +8
-│   x0             │  offset +0   ← low address (stack top)
-├──────────────────┤
-│   ELR_EL1        │  (below stack top, saved separately by asm)
-│   SPSR_EL1       │
+│   x0             │  offset +0   ← sp
 └──────────────────┘
 ```
 
@@ -91,12 +92,21 @@ On exception entry, hardware automatically saves `ELR_EL1` and `SPSR_EL1` (old P
 
 | Exception path                        | Estimated stack consumption |
 |---------------------------------------|-----------------------------|
-| Bare context save (asm entry)         | 256B (trap frame)           |
+| Bare context save (asm entry)         | 272B (trap frame)           |
 | Rust handler call chain               | ≤512B (no heap allocation)  |
-| Nested exception (sync during IRQ)    | +256B (second trap frame)   |
+| Nested exception (sync during IRQ)    | +272B (second trap frame)   |
 | **Single-core minimum kernel stack**  | **4 KiB** (with safety margin) |
 
 Single-core stage uses the stack at the end of 128 MiB RAM defined by the linker script; SMP stage needs a dedicated exception stack (≥4 KiB/core) per CPU.
+
+### 3.4 Key points (blocking syscalls and `ELR_EL1`)
+
+| Point | Detail |
+|-------|--------|
+| **Symptom** | Task A blocks inside syscall handling (e.g. IPC `recv`); task B runs and takes SVC; hardware updates `ELR_EL1` to B’s return PC. |
+| **Effect** | When A resumes and finishes the syscall, assembly restores GPRs from **A’s trap frame** (e.g. `x0` = A’s return value), but **`eret` uses the current `ELR_EL1`**. If not restored from A’s saved snapshot, execution jumps into **B’s kernel code**, so B appears to get the wrong syscall return (e.g. A’s packed `endpoint_recv` value printed as B’s `endpoint_call` result). |
+| **Fix** | Each vector stub saves `ELR_EL1` / `SPSR_EL1` at trap frame +256/+264; the return path `msr`s them back **before** `ldp` restores x0–x30; frame size is **272** bytes. |
+| **Related** | `sys_endpoint_recv` avoids an extra `schedule()` immediately after `block()` to reduce unnecessary preemption (orthogonal to the trap fix, helps IPC handshake stability). |
 
 ---
 
@@ -109,7 +119,7 @@ Each vector slot's assembly entry follows a uniform pattern:
 .align 7
 vector_el1_sync_spx:
     // 1. Save general-purpose registers to kernel stack
-    sub sp, sp, #256           // allocate trap frame
+    sub sp, sp, #272           // allocate trap frame
     stp x0, x1,   [sp, #0]
     stp x2, x3,   [sp, #16]
     stp x4, x5,   [sp, #32]
@@ -127,20 +137,27 @@ vector_el1_sync_spx:
     stp x28, x29, [sp, #224]
     str x30,      [sp, #240]
 
-    // 2. Save SP_EL0 and exception return info
+    // 2. Save SP_EL0; store ELR/SPSR in frame (ELR_EL1 is global across tasks)
     mrs x0, sp_el0
     str x0, [sp, #248]
-    mrs x0, elr_el1
-    mrs x1, spsr_el1
+    mov x0, #0                  // ExceptionKind (EL1 Sync slot)
+    mrs x3, elr_el1
+    mrs x4, spsr_el1
+    str x3, [sp, #256]
+    str x4, [sp, #264]
 
-    // 3. Call Rust dispatch function
-    //    Prototype: fn handle_exception(kind: ExceptionKind, trap_frame: &mut TrapFrame, elr: u64, spsr: u64)
+    // 3. Call Rust dispatch: handle_exception(kind, _reserved, trap_frame, elr, spsr)
     mov x2, sp                  // trap_frame pointer
+    mov x1, #0
     bl handle_exception
 
-    // 4. Restore SP_EL0
+    // 4. Restore SP_EL0, then ELR/SPSR from frame (before ldp restores x9)
     ldr x0, [sp, #248]
     msr sp_el0, x0
+    ldr x9, [sp, #256]
+    msr elr_el1, x9
+    ldr x9, [sp, #264]
+    msr spsr_el1, x9
 
     // 5. Restore general-purpose registers
     ldp x0, x1,   [sp, #0]
@@ -149,8 +166,8 @@ vector_el1_sync_spx:
     ldp x28, x29, [sp, #224]
     ldr x30,      [sp, #240]
 
-    // 6. Restore ELR/SPSR and return
-    add sp, sp, #256
+    // 6. Release frame and return
+    add sp, sp, #272
     eret
 ```
 
@@ -244,7 +261,7 @@ struct TrapFrame {
 }
 ```
 
-Total size: 32 × 8 = 256 bytes, matching the `sub sp, sp, #256` in assembly.
+Total size: 31 GPRs (`x0`–`x30`) × 8 + `sp_el0` + `elr_el1` + `spsr_el1` = 272 bytes, matching `sub sp, sp, #272` in assembly.
 
 ---
 

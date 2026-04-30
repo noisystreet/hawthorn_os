@@ -517,7 +517,7 @@ pub fn dump_tables() {
         }
 
         // Dump L2[0] for devices (via L1[0]) - includes GIC
-        let l1_0 = unsafe { *((l1 + 0) as *const u64) };
+        let l1_0 = unsafe { *(l1 as *const u64) };
         if l1_0 & PTE_TABLE != 0 {
             let l2 = entry_to_paddr(l1_0);
             crate::println!("[mm/dump] L2 table (devices) at {:#x}:", l2);

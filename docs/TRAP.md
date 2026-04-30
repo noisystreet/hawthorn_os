@@ -63,22 +63,23 @@ AArch64 `VBAR_EL1` 指向 16 个 128 字节（0x80）对齐的向量槽。每个
 
 ### 3.1 保存内容
 
-异常发生时，硬件自动保存 `ELR_EL1`、`SPSR_EL1`（旧 PSTATE）到系统寄存器。软件需要保存的通用寄存器为 `x0`–`x30` + `SP_EL0`，共计 32 个 64 位值。
+异常发生时，硬件将返回地址写入 `ELR_EL1`、将旧 `PSTATE` 写入 `SPSR_EL1`，但二者是**全局**系统寄存器。若在内核态系统调用处理中阻塞并切换到另一线程，后者再次陷入会覆盖 `ELR_EL1`；原线程稍后从 trap 帧恢复 GPR 并 `eret` 时，若仍依赖当时寄存器里的 `ELR_EL1`，会跳到**错误**的返回 PC。因此向量桩在栈上**额外保存**本次异常入口时的 `ELR_EL1` / `SPSR_EL1`；退出时在 **`ldp` 从帧内恢复 x0–x30 之前**，用栈中副本 **`msr elr_el1` / `msr spsr_el1`**，再恢复 GPR、`add sp`、`eret`。
 
-**Trap Frame 布局**（从高地址向低地址生长，栈顶对齐）：
+软件保存的通用寄存器为 `x0`–`x30` + `SP_EL0`，再加上述两个字段，共 **272** 字节（`sub sp, sp, #272`）。
+
+**Trap Frame 布局**（向低地址生长，`sp` 指向帧基址）：
 
 ```
-┌──────────────────┐ ← 高地址（栈底方向）
+┌──────────────────┐
+│   SPSR_EL1       │  offset +264
+│   ELR_EL1        │  offset +256
 │   SP_EL0         │  offset +248
 │   x30 (LR)       │  offset +240
 │   x29 (FP)       │  offset +232
 │   x28            │  offset +224
 │   ...            │
 │   x1             │  offset +8
-│   x0             │  offset +0   ← 低地址（栈顶方向）
-├──────────────────┤
-│   ELR_EL1        │  (栈顶下方，汇编额外保存)
-│   SPSR_EL1       │
+│   x0             │  offset +0   ← sp
 └──────────────────┘
 ```
 
@@ -91,12 +92,21 @@ AArch64 `VBAR_EL1` 指向 16 个 128 字节（0x80）对齐的向量槽。每个
 
 | 异常路径                      | 预估栈消耗     |
 |-------------------------------|---------------|
-| 裸上下文保存（汇编 entry）     | 256B（trap frame） |
+| 裸上下文保存（汇编 entry）     | 272B（trap frame） |
 | Rust handler 调用链            | ≤512B（无堆分配） |
-| 嵌套异常（IRQ 中发生 sync）    | +256B（第二次 trap frame） |
+| 嵌套异常（IRQ 中发生 sync）    | +272B（第二次 trap frame） |
 | **单核最小内核异常栈**         | **4 KiB**（含安全余量） |
 
 单核阶段使用链接脚本定义的 128MB RAM 末尾栈；多核阶段需为每个 CPU 核分配独立异常栈（≥4 KiB/核）。
+
+### 3.4 要点（可阻塞 syscall 与 ELR_EL1）
+
+| 要点 | 说明 |
+|------|------|
+| **现象** | 任务 A 在 `handle_exception` / syscall 路径中阻塞（如 IPC `recv`）；调度到任务 B 后，B 再执行 SVC，硬件把 `ELR_EL1` 更新为 B 的返回 PC。 |
+| **后果** | A 恢复并完成 syscall 后，汇编从 **A 的 trap 帧**恢复 GPR（例如 `x0` = A 的返回值），但 **`eret` 使用当前 `ELR_EL1`**；若未用 A 自己的入口快照覆盖，会跳到 **B 的内核代码**，表现为「B 打印了错误的 syscall 返回值」（例如把 A 的 `endpoint_recv` 打包值误认为 B 的 `endpoint_call` 返回）。 |
+| **修复** | 各向量桩在 trap 帧 +256/+264 保存 `ELR_EL1` / `SPSR_EL1`；返回路径上在 `ldp` 恢复 x0–x30 前 `msr` 写回；帧共 **272** 字节。 |
+| **相关** | `sys_endpoint_recv` 在 `block()` 之后不再额外 `schedule()`，避免不必要的抢占交错（与 trap 修复正交，但利于 IPC 握手稳定）。 |
 
 ---
 
@@ -109,7 +119,7 @@ AArch64 `VBAR_EL1` 指向 16 个 128 字节（0x80）对齐的向量槽。每个
 .align 7
 vector_el1_sync_spx:
     // 1. 保存通用寄存器到内核栈
-    sub sp, sp, #256           // 分配 trap frame 空间
+    sub sp, sp, #272           // 分配 trap frame 空间
     stp x0, x1,   [sp, #0]
     stp x2, x3,   [sp, #16]
     stp x4, x5,   [sp, #32]
@@ -127,20 +137,28 @@ vector_el1_sync_spx:
     stp x28, x29, [sp, #224]
     str x30,      [sp, #240]
 
-    // 2. 保存 SP_EL0 与异常返回信息
+    // 2. 保存 SP_EL0；将 ELR/SPSR 写入帧内（防止调度后 ELR_EL1 被覆盖）
     mrs x0, sp_el0
     str x0, [sp, #248]
-    mrs x0, elr_el1
-    mrs x1, spsr_el1
+    mov x0, #0                  // ExceptionKind（本槽为 EL1 Sync）
+    mrs x3, elr_el1
+    mrs x4, spsr_el1
+    str x3, [sp, #256]
+    str x4, [sp, #264]
 
     // 3. 调用 Rust 分发函数
-    //    原型: fn handle_exception(kind: ExceptionKind, trap_frame: &mut TrapFrame, elr: u64, spsr: u64)
+    //    原型: handle_exception(kind, _reserved, trap_frame, elr, spsr)
     mov x2, sp                  // trap_frame 指针
+    mov x1, #0
     bl handle_exception
 
-    // 4. 恢复 SP_EL0
+    // 4. 恢复 SP_EL0，再从帧内写回 ELR/SPSR（须在 ldp 恢复 x9 之前完成）
     ldr x0, [sp, #248]
     msr sp_el0, x0
+    ldr x9, [sp, #256]
+    msr elr_el1, x9
+    ldr x9, [sp, #264]
+    msr spsr_el1, x9
 
     // 5. 恢复通用寄存器
     ldp x0, x1,   [sp, #0]
@@ -149,8 +167,8 @@ vector_el1_sync_spx:
     ldp x28, x29, [sp, #224]
     ldr x30,      [sp, #240]
 
-    // 6. 恢复 ELR/SPSR 并返回
-    add sp, sp, #256
+    // 6. 释放帧并返回
+    add sp, sp, #272
     eret
 ```
 
@@ -244,7 +262,7 @@ struct TrapFrame {
 }
 ```
 
-总大小：32 × 8 = 256 字节，与汇编中 `sub sp, sp, #256` 一致。
+总大小：31 个 GPR（`x0`–`x30`）×8 + `sp_el0` + `elr_el1` + `spsr_el1` = 272 字节，与汇编中 `sub sp, sp, #272` 一致。
 
 ---
 

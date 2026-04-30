@@ -175,16 +175,77 @@ fn sys_endpoint_destroy(id: u64, _a1: u64, _a2: u64, _a3: u64, _a4: u64, _a5: u6
 }
 
 fn sys_endpoint_call(id: u64, msg: u64, _a2: u64, _a3: u64, _a4: u64, _a5: u64) -> u64 {
+    use crate::endpoint::CallResult;
+    let caller = crate::task::current_id().0;
+    crate::println!(
+        "[syscall] endpoint_call(ep={}, msg={}) caller={}",
+        id,
+        msg,
+        caller
+    );
     match crate::endpoint::call(id, msg) {
-        Ok(v) => v,
-        Err(e) => e.as_u64(),
+        CallResult::Reply(v) => {
+            crate::println!("[syscall] endpoint_call => Reply({})", v as i64);
+            v
+        }
+        CallResult::Blocked => {
+            crate::println!(
+                "[syscall] endpoint_call => Blocked, blocking task {}",
+                caller
+            );
+            let task_idx = crate::task::current_id().0 as usize;
+            crate::task::block();
+            crate::println!(
+                "[syscall] endpoint_call task {} resumed after block",
+                caller
+            );
+            // Do not `schedule()` here: `block()` already switched away. A second
+            // schedule before `take_reply_value` can reorder peers and break the
+            // recv → reply → wake(caller) handshake (call may observe garbage).
+            let reply = crate::endpoint::take_reply_value(task_idx);
+            crate::println!(
+                "[syscall] endpoint_call task {} take_reply_value={}",
+                caller,
+                reply as i64
+            );
+            reply
+        }
     }
 }
 
 fn sys_endpoint_recv(id: u64, _a1: u64, _a2: u64, _a3: u64, _a4: u64, _a5: u64) -> u64 {
+    use crate::endpoint::RecvResult;
+    let caller = crate::task::current_id().0;
+    crate::println!("[syscall] endpoint_recv(ep={}) caller={}", id, caller);
     match crate::endpoint::recv(id) {
-        Ok(v) => v,
-        Err(e) => e.as_u64(),
+        RecvResult::Message(v) => {
+            crate::println!("[syscall] endpoint_recv => Message({:#x})", v);
+            v
+        }
+        RecvResult::Blocked => {
+            crate::println!(
+                "[syscall] endpoint_recv => Blocked, blocking task {}",
+                caller
+            );
+            crate::task::block();
+            crate::println!(
+                "[syscall] endpoint_recv task {} resumed after block",
+                caller
+            );
+            // Do not `schedule()` here: `block()` already switched away. A second
+            // schedule before the recv retry can reorder tasks and corrupt the
+            // syscall return handshake (another task's trap frame / return path).
+            match crate::endpoint::recv(id) {
+                RecvResult::Message(v) => {
+                    crate::println!("[syscall] endpoint_recv retry => Message({:#x})", v);
+                    v
+                }
+                RecvResult::Blocked => {
+                    crate::println!("[syscall] endpoint_recv retry => Blocked again, EAGAIN");
+                    hawthorn_syscall_abi::Errno::EAGAIN.as_u64()
+                }
+            }
+        }
     }
 }
 
