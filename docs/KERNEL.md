@@ -136,9 +136,9 @@ Bootloader / **TF-A** 移交的 **异常级（EL）**、入口 PC、设备树指
 - **校验**：所有用户指针经 **能力+范围** 校验后再访问；避免 **TOCTOU**（可先拷贝到小内核缓冲或配合硬件保护）。
 - **调试**：可选 **跟踪点** 与 **慢路径日志**（编译期开关）。
 
-**当前实现（QEMU virt）**：`trap` 对 **EL1 与 EL0** 的 SVC（`ESR.EC == 0x15`）均调用 `syscall::dispatch`（`x8` = 调用号，`x0`–`x5` 为参数，`x0` 返回；错误为 **负 errno** 风格，见该 crate 文档）。已实现调用号包括 **`SYS_WRITE`**、**`SYS_YIELD`**、**`SYS_GETPID`**、**`SYS_EXIT`**、**`SYS_SLEEP`**、端点 MVP（create/destroy/call/recv/reply）及 **`SYS_ABI_INFO`**（返回 **`ABI_VERSION`**，便于用户程序在启动时探测兼容边界）。
+**当前实现（QEMU virt）**：`trap` 对 **EL1 与 EL0** 的 SVC（`ESR.EC == 0x15`）均调用 `syscall::dispatch`（`x8` = 调用号，`x0`–`x5` 为参数，`x0` 返回；错误为 **负 errno** 风格，见该 crate 文档）。已实现调用号包括 **`SYS_WRITE`**、**`SYS_YIELD`**、**`SYS_GETPID`**、**`SYS_EXIT`**、**`SYS_SLEEP`**、端点 MVP（create/destroy/call/recv/reply）及 **`SYS_ABI_INFO`**：`hawthorn_syscall_abi::abi_info_word()` 约定为 **低 32 位 = `ABI_VERSION`**、**高 32 位 = `ABI_CAP_*` 掩码**（与 errno 编码无关）。
 
-**模拟 EL0 用户态（MVP）**：`task::create_user` 为任务分配 **独立 TTBR0 用户页表**（自内核页表克隆），将链接段 **`.user_program`** 拷贝映射到用户虚址（演示为代码 **`0x1000`**、用户栈顶 **`0x8000`**）；首次调度经 **`user_return`** 以 **AArch64 EL0t** 执行内嵌字节程序。`SYS_WRITE` 等对 **用户缓冲** 仅允许落在当前策略规定的用户 VA 窗内（见 `kernel/src/syscall.rs`），否则返回 **`EFAULT`**。
+**模拟 EL0 用户态（MVP）**：`task::create_user` 为任务分配 **独立 TTBR0 用户页表**（自内核页表克隆），将链接段 **`.user_program`** 映射到 **`user_layout::USER_CODE_BASE`（`0x1000`）**；用户栈为 **单页**，顶为 **`user_layout::USER_STACK_TOP`（`0x8000`）**，**`USER_STACK_BOTTOM..TOP`** 已映射，**其下另有一页 guard（未映射）**；**代码页与用户栈页之间的 VA 区间未映射（空洞）**。首次调度经 **`user_return`** 以 **AArch64 EL0t** 执行内嵌程序。`SYS_WRITE` 等对 **用户缓冲** 必须 **完全落在** 已映射 **代码窗** 或 **栈窗** 之一内（见 **`kernel/src/user_layout.rs`** 与 **`syscall`**），否则返回 **`EFAULT`**。`create_user` 的入口参数须与上述固定布局一致（MVP 约束）。
 
 ---
 

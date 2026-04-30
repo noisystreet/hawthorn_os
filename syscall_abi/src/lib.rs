@@ -18,6 +18,11 @@
 //!
 //! Numbers 0–63 are reserved for the kernel core. 64–255 are reserved
 //! for future expansion. 256+ are dynamically assigned.
+//!
+//! ## `SYS_ABI_INFO` return value
+//!
+//! Low **32** bits: [`ABI_VERSION`]. High **32** bits: OR of [`ABI_CAP_*`] flags.
+//! This is a **non-negative** word (not an [`Errno`] encoding).
 
 #![cfg_attr(not(test), no_std)]
 
@@ -32,7 +37,7 @@ pub const SYS_ENDPOINT_DESTROY: u64 = 7;
 pub const SYS_ENDPOINT_CALL: u64 = 8;
 pub const SYS_ENDPOINT_RECV: u64 = 9;
 pub const SYS_ENDPOINT_REPLY: u64 = 10;
-/// Returns [`ABI_VERSION`] in `x0` (single return value; extra capability bits may be added later).
+/// [`SYS_ABI_INFO`] packs [`ABI_VERSION`] (low 32) and capability bits (high 32); see [`abi_info_word`].
 pub const SYS_ABI_INFO: u64 = 11;
 
 pub const MAX_ERRNO: u64 = 4095;
@@ -114,6 +119,15 @@ pub fn errno_from_ret(ret: u64) -> Option<Errno> {
 
 pub const ABI_VERSION: u64 = 1;
 
+/// Kernel exposes per-task EL0 page tables + user-pointer validation for the low fixed window.
+pub const ABI_CAP_EL0_USER_AS: u64 = 1 << 0;
+
+/// Return value for [`SYS_ABI_INFO`]: version in low half, [`ABI_CAP_*`] mask in high half.
+#[inline]
+pub fn abi_info_word() -> u64 {
+    ABI_VERSION | (ABI_CAP_EL0_USER_AS << 32)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -121,6 +135,13 @@ mod tests {
     #[test]
     fn abi_info_syscall_number_reserved() {
         assert_eq!(SYS_ABI_INFO, 11);
+    }
+
+    #[test]
+    fn abi_info_word_packing() {
+        let w = abi_info_word();
+        assert_eq!(w & 0xFFFF_FFFF, ABI_VERSION);
+        assert_eq!(w >> 32, ABI_CAP_EL0_USER_AS);
     }
 
     #[test]

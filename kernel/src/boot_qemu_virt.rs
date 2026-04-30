@@ -10,6 +10,8 @@ use hawthorn_syscall_abi::{
     SYS_ENDPOINT_REPLY, SYS_GETPID, SYS_WRITE,
 };
 
+use crate::user_layout::{USER_CODE_BASE, USER_STACK_TOP};
+
 /// PL011 base on QEMU `virt` AArch64 (DT `pl011@9000000`).
 pub const PL011_BASE: usize = 0x900_0000;
 const PL011_DR: usize = PL011_BASE;
@@ -234,8 +236,10 @@ pub extern "C" fn kernel_main() -> ! {
             );
         }
         crate::println!(
-            "[task D] SYS_ABI_INFO returned {} (expect {})",
+            "[task D] SYS_ABI_INFO word={:#x} version={} caps={:#x} (expect version {})",
             abi,
+            abi & 0xFFFF_FFFF,
+            abi >> 32,
             hawthorn_syscall_abi::ABI_VERSION
         );
 
@@ -383,8 +387,8 @@ pub extern "C" fn kernel_main() -> ! {
     crate::task::create(task_d, 1);
     crate::println!("[task] created tasks A, B, D, E (syscall + endpoint test)");
 
-    // Create EL0 user task: code at 0x1000, stack top at 0x8000.
-    match crate::task::create_user(0x1000, 0x8000) {
+    // Create EL0 user task at the fixed MVP layout (see `user_layout` / `KERNEL.md` §3.8).
+    match crate::task::create_user(USER_CODE_BASE, USER_STACK_TOP) {
         Some(id) => {
             let user_prog_start = unsafe { &__user_program_start as *const _ as usize };
             let user_prog_end = unsafe { &__user_program_end as *const _ as usize };

@@ -17,8 +17,6 @@ use hawthorn_syscall_abi::{
 };
 
 const MAX_SYSCALL: u64 = 64;
-const USER_VA_MIN: usize = 0x1000;
-const USER_VA_MAX_EXCL: usize = 0x8000;
 const WRITE_CHUNK_SIZE: usize = 256;
 /// Identity RAM window (see `kernel/src/mm.rs` / `frame_alloc`).
 const KERNEL_RAM_START: usize = 0x4000_0000;
@@ -129,17 +127,11 @@ fn kernel_buffer_range_ok(start: usize, len: usize) -> bool {
 }
 
 fn user_range_valid(start: usize, len: usize) -> bool {
-    if len == 0 {
-        return true;
-    }
-    let Some(end) = start.checked_add(len) else {
-        return false;
-    };
-    start >= USER_VA_MIN && end <= USER_VA_MAX_EXCL && start < end
+    crate::user_layout::user_range_valid(start, len)
 }
 
 fn sys_abi_info(_a0: u64, _a1: u64, _a2: u64, _a3: u64, _a4: u64, _a5: u64) -> u64 {
-    hawthorn_syscall_abi::ABI_VERSION
+    hawthorn_syscall_abi::abi_info_word()
 }
 
 fn sys_yield(_a0: u64, _a1: u64, _a2: u64, _a3: u64, _a4: u64, _a5: u64) -> u64 {

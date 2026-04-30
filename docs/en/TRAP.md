@@ -2,7 +2,7 @@
 
 > **[中文](../TRAP.md)** — Chinese source of this document.
 
-This document describes the AArch64 exception vector table, trap entry, context save, and exception dispatch design for the **Hawthorn (山楂) microkernel**. The current milestone (M2) covers **EL1 exception handling only**; EL0 user-space traps and EL2/EL3 switching will be extended in later milestones.
+This document describes the AArch64 exception vector table, trap entry, context save, and exception dispatch design for the **Hawthorn (山楂) microkernel**. Current code covers **EL1** paths and **EL0→EL1** **SVC / IRQ** (for **syscalls** and **simulated EL0 user tasks**); **EL2 / EL3** switching remains future work.
 
 ---
 
@@ -56,6 +56,12 @@ Current stage (M2, EL1 kernel only), **active slots** are:
 | `0x580`  | EL0→EL1 SError (AArch64)               | Print ESR, kill thread or infinite loop |
 
 Remaining slots (EL0 SP0 group, AArch32 group) jump to a **generic exception stub** that prints diagnostics and enters an infinite loop.
+
+### 2.2 EL0 synchronous (`SVC`) exceptions and syscalls
+
+Vector offset **`0x400`** is taken when **AArch64 EL0** executes `svc`. When **`ESR_EL1.EC == 0x15`** (AArch64 SVC), dispatch reaches `syscall::dispatch` (calling convention and numbers in the shared **`hawthorn_syscall_abi`** crate; overview in [KERNEL.md §3.8 — Syscalls](./KERNEL.md#38-syscalls-syscall)).
+
+**Simulated user tasks** use a private **`TTBR0_EL1`** user page table and the fixed low VA layout in **`kernel/src/user_layout.rs`**: an **unmapped hole** between the user text page and stack page, plus a **guard** page below the mapped stack. **`SYS_WRITE`** and peers require user buffers to lie **entirely** inside the mapped **text window** or **stack window** (not the hole). **`SYS_ABI_INFO`** returns **`ABI_VERSION`** in the **low 32 bits** and a capability bitmask (e.g. **`ABI_CAP_EL0_USER_AS`**) in the **high 32 bits** — not a negative `errno` encoding.
 
 ---
 

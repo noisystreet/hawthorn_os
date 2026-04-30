@@ -39,6 +39,9 @@ pub mod timer;
 #[cfg(all(target_arch = "aarch64", target_os = "none"))]
 pub mod trap;
 
+#[cfg(all(target_arch = "aarch64", target_os = "none"))]
+pub mod user_layout;
+
 /// 占位符号，便于空 crate 在 host 上通过 `cargo check`（裸机路径见 `boot_qemu_virt`）。
 #[cfg(not(all(target_arch = "aarch64", target_os = "none")))]
 pub const PLACEHOLDER: u32 = 0;

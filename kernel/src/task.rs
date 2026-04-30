@@ -250,6 +250,19 @@ pub fn create(entry: extern "C" fn(), priority: u8) -> Option<TaskId> {
 /// - `None`: Task table full or out of memory
 pub fn create_user(entry: usize, stack_top: usize) -> Option<TaskId> {
     unsafe {
+        if entry != crate::user_layout::USER_CODE_BASE
+            || stack_top != crate::user_layout::USER_STACK_TOP
+        {
+            crate::println!(
+                "[task] create_user: expected entry {:#x} stack_top {:#x}, got entry {:#x} stack_top {:#x}",
+                crate::user_layout::USER_CODE_BASE,
+                crate::user_layout::USER_STACK_TOP,
+                entry,
+                stack_top
+            );
+            return None;
+        }
+
         // Find a free task slot
         let mut idx = None;
         #[allow(clippy::needless_range_loop)]
@@ -321,8 +334,9 @@ pub fn create_user(entry: usize, stack_top: usize) -> Option<TaskId> {
             USER_OWNED_FRAME_COUNTS[idx] = owned + 1;
         }
 
-        // Map user stack (4K stack page)
-        let user_stack_bottom = stack_top - STACK_SIZE;
+        // Map user stack: one [`crate::user_layout::USER_STACK_BYTES`] page at the top of the window;
+        // `[user_stack_bottom - PAGE_SIZE, user_stack_bottom)` stays unmapped as a guard.
+        let user_stack_bottom = crate::user_layout::USER_STACK_BOTTOM;
         let Some(stack_frame) = crate::frame_alloc::alloc_frame() else {
             cleanup_user_allocation(idx, user_pt);
             return None;
