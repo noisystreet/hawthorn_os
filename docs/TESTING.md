@@ -1,0 +1,83 @@
+# 山楂 / hawthorn — 测试策略与分层
+
+> **[English](./en/TESTING.md)** — 英文镜像。
+
+本文档定义 **山楂（hawthorn）** 仓库的测试分层、与 CI 的对应关系，以及裸机 / QEMU 端到端验证的约定。实现细节与模块边界见 [KERNEL.md](./KERNEL.md)、[ARCHITECTURE.md](./ARCHITECTURE.md)。
+
+---
+
+## 1. 分层总览
+
+| 层级 | 目的 | 典型位置 | 运行环境 |
+|------|------|-----------|----------|
+| **L1 单元测试** | 单模块不变量、纯逻辑、数据结构 | 各 crate 内 `#[cfg(test)] mod tests { ... }` | Host（`cargo test`） |
+| **L2 集成测试** | 跨模块的 **crate 公有 API**、链接与可测试子集 | `kernel/tests/*.rs` 等 crate 根下 `tests/` | Host |
+| **L3 端到端（裸机 / QEMU）** | 启动、`trap`、串口输出、EL0 路径等整机行为 | `scripts/verify_kernel_qemu_virt_*.sh` | Linux + QEMU + `socat`（与 CI 一致） |
+| **L4 硬件在环（HIL）** | 板级时序、驱动、真实中断 | **规划中**；脚本与门禁待 Tier-1 板子纳入 CI 或手动回归清单 | 目标硬件 |
+
+**原则**
+
+- **与 CI 同源**：合并前至少通过本地与 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) 相同维度的检查（含 QEMU 验证脚本，若变更影响引导或串口路径）。  
+- **默认不在 `aarch64-unknown-none` 上跑 `cargo test`**：裸机构建用于 `cargo check` / `cargo build`；可执行逻辑优先在 Host 上用 `#[cfg(test)]` 或可移植子模块验证。  
+- **端到端断言**：QEMU 脚本通过 **串口输出子串**（或退出码）判定；新增里程碑输出时同步更新脚本中的期望串。
+
+---
+
+## 2. L1：单元测试
+
+- **内核 crate（`hawthorn_kernel`）**：在 `not(test)` 时为 `no_std`；`cargo test -p hawthorn_kernel` 在 **host** 上编译可测试模块（如 `task_policy`、`endpoint`、`frame_alloc`、`trap_frame` 等）。与特权/板级强相关的模块仅在 `target_arch = "aarch64", target_os = "none"` 下入会，**单元测试不替代** L3 的 QEMU 验证。  
+- **ABI crate（`hawthorn_syscall_abi`）**：常量、编码与简单属性在Host 单元测试中覆盖。  
+- **`qemu_minimal`**：按 crate 需要补充 `#[cfg(test)]`（当前可能较薄）。
+
+**约定**
+
+- 纯函数与策略逻辑尽量抽到 **Host 可编译** 的模块，便于 L1 覆盖（参见 `task_policy.rs`）。  
+- `unsafe` 契约：在 CODE_STYLE 允许范围内用单元测试 + 注释不变量；必要时后续引入 **Miri**（按需，不默认进 CI）。
+
+---
+
+## 3. L2：集成测试
+
+- **位置**：`kernel/tests/*.rs`（crate 根目录下的 `tests`，与 `src/` 内单元测试区分）。  
+- **职责**：从 **库对外接口** 引用 `hawthorn_kernel`，验证多个 `pub` 模块组合、gating 与链接无误；**不**重复把所有逻辑再测一遍（细粒度留在 L1）。  
+- **扩展**：未来新增 `servers/`、`syscall_abi` 独立 user 侧 crate 时，可在各自 `tests/` 中增加 Host 集成测试；跨进程 / 真 IPC 归属 L3/L4。
+
+---
+
+## 4. L3：QEMU 端到端
+
+| 脚本 | 大致覆盖 |
+|------|----------|
+| [`scripts/verify_kernel_qemu_virt_serial.sh`](../scripts/verify_kernel_qemu_virt_serial.sh) | `hawthorn_kernel_qemu_virt` 镜像启动、PL011 串口期望输出 |
+| [`scripts/verify_kernel_qemu_virt_el0_serial.sh`](../scripts/verify_kernel_qemu_virt_el0_serial.sh) | 含 **EL0 / 用户态** 路径的串口回归（与内核用户任务启动约定一致） |
+
+**本地运行**（需已安装 `qemu-system-aarch64`、`socat`；参见 CI `install qemu test deps` 步骤）：
+
+```bash
+bash scripts/verify_kernel_qemu_virt_serial.sh
+bash scripts/verify_kernel_qemu_virt_el0_serial.sh
+```
+
+可选：`PROFILE=release` 跑 release 构建。
+
+修改 **启动流、早期打印、用户态入口、ABI 探测输出** 时，必须同步更新脚本中的期望串并跑通上述命令。
+
+---
+
+## 5. L4：HIL 与后续
+
+- **RK3588 / 香橙派 5**：定时器精度、GIC、DMA 等与虚拟平台行为不一致的内容，在 L3 无法覆盖时，以 **HIL 清单**（Issue / 发布说明或将来 `scripts/` 下板级脚本）记录；纳入里程碑后再考虑自助 CI Runner 或手动门禁。  
+- **契约测试**：syscall 号、`abi_info` 位等可在文档 [SYSCALL_ABI.md](./SYSCALL_ABI.md) 与单元/集成测试中对齐；重大变更建议走 ADR（若仓库启用 `docs/adr/`）。
+
+---
+
+## 6. 与 AGENTS / 贡献流程
+
+- Agent 与贡献者：**本地验证** 见根目录 [AGENTS.md](../AGENTS.md) §4；其中 **`cargo test --workspace`** 覆盖 L1 + 各 crate L2；QEMU 两脚本覆盖 L3。  
+- 新增测试时：优先标明层级（本文件 §1 表格），避免把重逻辑全堆进 bash 或全依赖 QEMU。
+
+---
+
+## 文档维护
+
+- 本文档与 [ARCHITECTURE.md §5.3](./ARCHITECTURE.md) 摘要对应；CI 变更（新增 job、省略 QEMU）时请同步更新 **§4** 与 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)。

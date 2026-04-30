@@ -22,8 +22,9 @@ Drivers, network stacks, and file systems are intended to run as **user services
 
 1. `docs/ARCHITECTURE.md` or `docs/en/ARCHITECTURE.md` — goals, layering, roadmap, open decisions.  
 2. `docs/KERNEL.md` or `docs/en/KERNEL.md` — kernel modules, IPC, capabilities, RK3588 notes.  
-3. `docs/CODE_STYLE.md` — Rust / `no_std` / `unsafe` / Clippy expectations.  
-4. `CONTRIBUTING.md` — license, pre-commit, security reporting.
+3. `docs/TESTING.md` or `docs/en/TESTING.md` — test layers (L1–L4), QEMU scripts vs `cargo test`, CI mapping.  
+4. `docs/CODE_STYLE.md` — Rust / `no_std` / `unsafe` / Clippy expectations.  
+5. `CONTRIBUTING.md` — license, pre-commit, security reporting.
 
 **Bilingual rule:** substantive doc changes must update **both** `docs/<name>.md` and `docs/en/<name>.md` in the same change (see `.cursor/rules/hawthorn-docs-bilingual.mdc`). Hub pages: `docs/README.md` ↔ `docs/en/README.md`.
 
@@ -62,7 +63,11 @@ cargo check -p hawthorn_kernel
 cargo check -p hawthorn_kernel --target aarch64-unknown-none
 cargo build -p hawthorn_kernel --features bare-metal --target aarch64-unknown-none
 cargo build -p hawthorn_qemu_minimal --features bare-metal --target aarch64-unknown-none
+bash scripts/verify_kernel_qemu_virt_serial.sh
+bash scripts/verify_kernel_qemu_virt_el0_serial.sh
 ```
+
+**L3 (QEMU):** requires `qemu-system-aarch64` and `socat` (see CI). Strategy: `docs/TESTING.md` / `docs/en/TESTING.md`.
 
 Optional: `pre-commit install` then each `git commit` runs **typos** / **fmt** / **clippy** (with cognitive complexity lint) / **test** (`pre-commit` stage) and validates the **commit message first line** (**`commit-msg`**, Conventional Commits — see `docs/COMMIT_CONVENTIONS.md`). Optional: `git config commit.template .gitmessage` (see `CONTRIBUTING.md`).
 

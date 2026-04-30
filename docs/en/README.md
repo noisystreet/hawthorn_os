@@ -13,6 +13,7 @@ Keep **Chinese and English in sync** on every substantive edit (see `.cursor/rul
 | English | Chinese |
 |---------|---------|
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | [../ARCHITECTURE.md](../ARCHITECTURE.md) |
+| [TESTING.md](./TESTING.md) | [../TESTING.md](../TESTING.md) |
 | [KERNEL.md](./KERNEL.md) | [../KERNEL.md](../KERNEL.md) |
 | [PORTING.md](./PORTING.md) | [../PORTING.md](../PORTING.md) |
 | [BOOT.md](./BOOT.md) | [../BOOT.md](../BOOT.md) |

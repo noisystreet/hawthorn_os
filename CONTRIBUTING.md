@@ -5,7 +5,7 @@
 - **GitHub**：[Issue 模板](.github/ISSUE_TEMPLATE)、[Pull Request 模板](.github/pull_request_template.md)（新建 Issue/PR 时选用）
 - [代码风格](docs/CODE_STYLE.md)
 - [提交规范](docs/COMMIT_CONVENTIONS.md)
-- [架构说明](docs/ARCHITECTURE.md) 与 [微内核设计](docs/KERNEL.md)（涉及内核行为或 ABI 的变更）
+- [架构说明](docs/ARCHITECTURE.md)、[微内核设计](docs/KERNEL.md)（涉及内核行为或 ABI 的变更）、[测试分层](docs/TESTING.md)（新增/调整测试或 QEMU 验证脚本时）
 
 ## Git pre-commit（推荐）
 

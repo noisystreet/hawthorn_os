@@ -130,9 +130,13 @@
 
 ### 5.3 测试与质量
 
-- **Host 侧单元测试**：纯逻辑与调度器模型可在 `std` 下模拟。
-- **HIL**：硬件在环回归控制周期与驱动；**Miri** 用于部分 `unsafe` 契约（适用时）。
-- **静态分析**：Clippy、`unsafe` 审计清单、关键模块 **MISRA/行业规范** 对照（按需）。
+测试分层（**L1 单元 / L2 集成 / L3 QEMU 端到端 / L4 HIL**）、目录约定及与 CI 的对应关系见专文 **[TESTING.md](./TESTING.md)**。摘要如下：
+
+- **L1（单元）**：各 crate 内 `#[cfg(test)]`；`hawthorn_kernel` 在 host 上 `cargo test` 编译可移植子集（`no_std` 仅在 `not(test)` 时启用）。
+- **L2（集成）**：crate 根目录 `tests/*.rs`，覆盖 **公有 API** 链接与组合；细粒度逻辑仍在 L1。
+- **L3（端到端）**：`scripts/verify_kernel_qemu_virt_*.sh` 在 QEMU `virt` + PL011 上断言串口输出；与 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) 一致。
+- **L4（HIL）**：Tier-1 板级与时序以清单/后续脚本纳入；**Miri** 可用于部分 `unsafe` 契约（按需，非默认 CI）。
+- **静态分析**：Clippy（含认知复杂度阈值）、`unsafe` 审计清单、关键模块 **MISRA/行业规范** 对照（按需）。
 
 ---
 
@@ -200,4 +204,4 @@ hawthorn/                  # 仓库根（中文名：山楂；英文代号 hawth
 - 本文档随里程碑更新；**内核行为与对象模型**变更需同步 [KERNEL.md](./KERNEL.md)、[BOOT.md](./BOOT.md)、[SYSCALL_ABI.md](./SYSCALL_ABI.md)。
 - **移植与运行**：[PORTING.md](./PORTING.md)；**平台列表**：[PLATFORMS.md](./PLATFORMS.md)；**术语**：[GLOSSARY.md](./GLOSSARY.md)；**对外 API 索引**：[API.md](./API.md)。
 - 评审关注：**最坏延迟**、**内存预算**、**启动时序**、**错误恢复** 四类指标是否与产品需求一致。
-- 代码风格见 [CODE_STYLE.md](./CODE_STYLE.md)；Git 提交与 PR 约定见 [COMMIT_CONVENTIONS.md](./COMMIT_CONVENTIONS.md)；贡献与安全见根目录 [CONTRIBUTING.md](../CONTRIBUTING.md)、[SECURITY.md](../SECURITY.md)。
+- 代码风格见 [CODE_STYLE.md](./CODE_STYLE.md)；测试分层见 [TESTING.md](./TESTING.md)；Git 提交与 PR 约定见 [COMMIT_CONVENTIONS.md](./COMMIT_CONVENTIONS.md)；贡献与安全见根目录 [CONTRIBUTING.md](../CONTRIBUTING.md)、[SECURITY.md](../SECURITY.md)。

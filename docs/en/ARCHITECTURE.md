@@ -130,9 +130,13 @@ The microkernel is **policy-light mechanism**: threads/scheduling, capability ta
 
 ### 5.3 Test & quality
 
-- **Host unit tests:** pure logic / scheduler models under `std`.  
-- **HIL:** regress control periods and drivers on hardware; **Miri** for some `unsafe` contracts.  
-- **Static:** Clippy, `unsafe` audit checklist, optional MISRA-style mapping.
+Full layering (**L1 unit / L2 integration / L3 QEMU E2E / L4 HIL**), layout, and CI mapping: **[TESTING.md](./TESTING.md)**. Summary:
+
+- **L1 (unit):** `#[cfg(test)]` inside each crate; `hawthorn_kernel` runs `cargo test` on the host for portable subsets (`no_std` only when `not(test)`).  
+- **L2 (integration):** crate-root `tests/*.rs` for **public API** linking and composition; keep detail in L1.  
+- **L3 (E2E):** `scripts/verify_kernel_qemu_virt_*.sh` on QEMU `virt` + PL011 assert serial output; matches [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).  
+- **L4 (HIL):** Tier-1 board/timing via checklist/future scripts; **Miri** optional for some `unsafe` contracts (not default CI).  
+- **Static:** Clippy (incl. cognitive complexity cap), `unsafe` audit checklist, optional MISRA-style mapping.
 
 ---
 
@@ -200,4 +204,4 @@ hawthorn/                  # repo root (Chinese: 山楂; code name hawthorn)
 - Update [KERNEL.md](./KERNEL.md), [BOOT.md](./BOOT.md), [SYSCALL_ABI.md](./SYSCALL_ABI.md) when kernel objects or ABI change.  
 - **Porting:** [PORTING.md](./PORTING.md); **tiers:** [PLATFORMS.md](./PLATFORMS.md); **glossary:** [GLOSSARY.md](./GLOSSARY.md); **API index:** [API.md](./API.md).  
 - Review axes: **WCET**, **memory budget**, **boot timing**, **recovery**.  
-- Style / commits: [CODE_STYLE.md](./CODE_STYLE.md), [COMMIT_CONVENTIONS.md](./COMMIT_CONVENTIONS.md); contributing / security: [CONTRIBUTING.md](../../CONTRIBUTING.md), [SECURITY.md](../../SECURITY.md).
+- Style / commits: [CODE_STYLE.md](./CODE_STYLE.md), [COMMIT_CONVENTIONS.md](./COMMIT_CONVENTIONS.md); testing: [TESTING.md](./TESTING.md); contributing / security: [CONTRIBUTING.md](../../CONTRIBUTING.md), [SECURITY.md](../../SECURITY.md).

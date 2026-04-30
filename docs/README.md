@@ -8,6 +8,7 @@
 | 中文 | English |
 |------|---------|
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | [en/ARCHITECTURE.md](./en/ARCHITECTURE.md) |
+| [TESTING.md](./TESTING.md) | [en/TESTING.md](./en/TESTING.md) |
 | [KERNEL.md](./KERNEL.md) | [en/KERNEL.md](./en/KERNEL.md) |
 | [PORTING.md](./PORTING.md) | [en/PORTING.md](./en/PORTING.md) |
 | [BOOT.md](./BOOT.md) | [en/BOOT.md](./en/BOOT.md) |
