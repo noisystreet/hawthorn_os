@@ -88,6 +88,10 @@ pub struct Task {
     pub saved_elr: u64,
     pub saved_spsr: u64,
     pub saved_sp_el0: u64,
+    /// Kernel VA of this task's current EL0 [`crate::trap_frame::TrapFrame`] while handling
+    /// `El0SyncA64` / `El0IrqA64` (caller-saved `x2` from the vector stub is not preserved across
+    /// [`schedule()`], so syscalls/IRQ return must sync via this pointer).
+    pub el0_trap_frame: *mut crate::trap_frame::TrapFrame,
 }
 
 impl Task {
@@ -104,6 +108,7 @@ impl Task {
         saved_elr: 0,
         saved_spsr: 0,
         saved_sp_el0: 0,
+        el0_trap_frame: core::ptr::null_mut(),
     };
 }
 
@@ -187,6 +192,7 @@ pub fn init() {
             saved_elr: 0,
             saved_spsr: 0,
             saved_sp_el0: 0,
+            el0_trap_frame: core::ptr::null_mut(),
         };
         CURRENT_TASK = 0;
         NEED_RESCHEDULE = false;
@@ -229,6 +235,7 @@ pub fn create(entry: extern "C" fn(), priority: u8) -> Option<TaskId> {
             saved_elr: 0,
             saved_spsr: 0,
             saved_sp_el0: 0,
+            el0_trap_frame: core::ptr::null_mut(),
         };
         for frame_slot in USER_OWNED_FRAMES[idx].iter_mut() {
             *frame_slot = 0;
@@ -372,6 +379,7 @@ pub fn create_user(entry: usize, stack_top: usize) -> Option<TaskId> {
             // Subsequent returns from exceptions must restore the saved SPSR value.
             saved_spsr: 0x0000_0000,
             saved_sp_el0: stack_top as u64,
+            el0_trap_frame: core::ptr::null_mut(),
         };
 
         Some(TaskId(idx as u16))
@@ -433,6 +441,7 @@ fn release_task_resources(task_idx: usize) {
     task.saved_elr = 0;
     task.saved_spsr = 0;
     task.saved_sp_el0 = 0;
+    task.el0_trap_frame = core::ptr::null_mut();
     task.is_user = false;
     crate::println!(
         "[task] released user resources: task={} frames={} page_table={:#x}",
@@ -475,6 +484,22 @@ pub fn set_current_saved_context(elr: u64, spsr: u64, sp_el0: u64) {
         TASK_TABLE[idx].saved_spsr = spsr;
         TASK_TABLE[idx].saved_sp_el0 = sp_el0;
     }
+}
+
+/// Record the live [`crate::trap_frame::TrapFrame`] for the current user task on EL0 exception.
+///
+/// # Safety
+/// `tf` must point at the frame built by the vector stub on this task's kernel stack and remain
+/// valid until that stub `eret`s or this pointer is cleared.
+#[inline]
+pub unsafe fn set_current_el0_trap_frame(tf: *mut crate::trap_frame::TrapFrame) {
+    TASK_TABLE[CURRENT_TASK].el0_trap_frame = tf;
+}
+
+/// Live EL0 [`crate::trap_frame::TrapFrame`] for the running task, or null before the first EL0 trap.
+#[inline]
+pub fn current_el0_trap_frame() -> *mut crate::trap_frame::TrapFrame {
+    unsafe { TASK_TABLE[CURRENT_TASK].el0_trap_frame }
 }
 
 extern "C" {

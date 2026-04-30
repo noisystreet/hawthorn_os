@@ -18,6 +18,20 @@ use core::arch::global_asm;
 use crate::boot_qemu_virt::{pl011_init, pl011_write_bytes};
 pub use crate::trap_frame::TrapFrame;
 
+/// Copy EL0 return state from the current task TCB into the in-memory trap frame so the vector
+/// stub's `ldr`/`msr` sequence matches [`crate::task::set_current_saved_context`] (the frame on
+/// the stack is not updated when only system registers are written from Rust).
+unsafe fn sync_el0_saved_sysregs_into_trap_frame(tf: *mut TrapFrame) {
+    if tf.is_null() {
+        return;
+    }
+    unsafe {
+        (*tf).elr_el1 = crate::task::current_saved_elr();
+        (*tf).spsr_el1 = crate::task::current_saved_spsr();
+        (*tf).sp_el0 = crate::task::current_saved_sp_el0();
+    }
+}
+
 /// Classification of the active vector slot passed to [`handle_exception`].
 #[repr(u64)]
 pub enum ExceptionKind {
@@ -441,7 +455,7 @@ global_asm!(
     //   24: time_slice (u64)
     //   32: daif (u64)
     //   40: wake_tick (u64)
-    //   40: is_user (bool) + 7-byte padding
+    //   40: is_user (bool) + padding through user fields / el0_trap_frame (see Task in task.rs)
     //   48: user_page_table (usize)
     //   56: saved_elr (u64)
     //   64: saved_spsr (u64)
@@ -529,21 +543,33 @@ unsafe fn handle_el0_syscall(_trap_frame: *mut TrapFrame, is_user: bool) {
     unsafe {
         asm!("msr daifset, #0xf; isb", options(nomem, nostack));
     }
-    let nr = unsafe { (*_trap_frame).x[8] };
-    let a0 = unsafe { (*_trap_frame).x[0] };
-    let a1 = unsafe { (*_trap_frame).x[1] };
-    let a2 = unsafe { (*_trap_frame).x[2] };
-    let a3 = unsafe { (*_trap_frame).x[3] };
-    let a4 = unsafe { (*_trap_frame).x[4] };
-    let a5 = unsafe { (*_trap_frame).x[5] };
+    let tf = if is_user {
+        let p = crate::task::current_el0_trap_frame();
+        if p.is_null() {
+            _trap_frame
+        } else {
+            p
+        }
+    } else {
+        _trap_frame
+    };
+    let nr = unsafe { (*tf).x[8] };
+    let a0 = unsafe { (*tf).x[0] };
+    let a1 = unsafe { (*tf).x[1] };
+    let a2 = unsafe { (*tf).x[2] };
+    let a3 = unsafe { (*tf).x[3] };
+    let a4 = unsafe { (*tf).x[4] };
+    let a5 = unsafe { (*tf).x[5] };
 
     let ret = crate::syscall::dispatch(nr, a0, a1, a2, a3, a4, a5);
 
     unsafe {
-        (*_trap_frame).x[0] = ret;
+        (*tf).x[0] = ret;
     }
     if is_user {
-        restore_el0_return_context_from_current_task();
+        unsafe {
+            sync_el0_saved_sysregs_into_trap_frame(tf);
+        }
     }
 }
 
@@ -625,8 +651,10 @@ unsafe extern "C" fn handle_exception(
             }
         }
         Ok(ExceptionKind::El0IrqA64) => {
-            // Save user state before handling IRQ
             if is_user {
+                unsafe {
+                    crate::task::set_current_el0_trap_frame(_trap_frame);
+                }
                 crate::task::set_current_saved_context(elr, spsr, read_sp_el0());
             }
 
@@ -637,12 +665,19 @@ unsafe extern "C" fn handle_exception(
                 crate::task::schedule();
             }
             if crate::task::current_is_user() {
-                restore_el0_return_context_from_current_task();
+                let tf = crate::task::current_el0_trap_frame();
+                if !tf.is_null() {
+                    unsafe {
+                        sync_el0_saved_sysregs_into_trap_frame(tf);
+                    }
+                }
             }
         }
         Ok(ExceptionKind::El0SyncA64) => {
-            // Save user state before handling syscall or dumping an EL0 fault.
             if is_user {
+                unsafe {
+                    crate::task::set_current_el0_trap_frame(_trap_frame);
+                }
                 crate::task::set_current_saved_context(elr, spsr, read_sp_el0());
             }
 
@@ -692,18 +727,6 @@ fn read_sp_el0() -> u64 {
     let sp: u64;
     unsafe { asm!("mrs {}, sp_el0", out(reg) sp) };
     sp
-}
-
-fn restore_el0_return_context_from_current_task() {
-    let elr = crate::task::current_saved_elr();
-    let spsr = crate::task::current_saved_spsr();
-    let sp_el0 = crate::task::current_saved_sp_el0();
-    unsafe {
-        asm!("msr elr_el1, {}", in(reg) elr, options(nostack, preserves_flags));
-        asm!("msr spsr_el1, {}", in(reg) spsr, options(nostack, preserves_flags));
-        asm!("msr sp_el0, {}", in(reg) sp_el0, options(nostack, preserves_flags));
-        asm!("isb", options(nostack, preserves_flags));
-    }
 }
 
 /// Install the exception vector table by writing its address to `VBAR_EL1`.

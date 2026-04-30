@@ -112,6 +112,7 @@ AArch64 `VBAR_EL1` 指向 16 个 128 字节（0x80）对齐的向量槽。每个
 | **现象** | 任务 A 在 `handle_exception` / syscall 路径中阻塞（如 IPC `recv`）；调度到任务 B 后，B 再执行 SVC，硬件把 `ELR_EL1` 更新为 B 的返回 PC。 |
 | **后果** | A 恢复并完成 syscall 后，汇编从 **A 的 trap 帧**恢复 GPR（例如 `x0` = A 的返回值），但 **`eret` 使用当前 `ELR_EL1`**；若未用 A 自己的入口快照覆盖，会跳到 **B 的内核代码**，表现为「B 打印了错误的 syscall 返回值」（例如把 A 的 `endpoint_recv` 打包值误认为 B 的 `endpoint_call` 返回）。 |
 | **修复** | 各向量桩在 trap 帧 +256/+264 保存 `ELR_EL1` / `SPSR_EL1`；返回路径上在 `ldp` 恢复 x0–x30 前 `msr` 写回；帧共 **272** 字节。 |
+| **EL0 `trap_frame` 指针** | 桩用 **x2** 传 `&mut TrapFrame`，但 **x2 为 caller-saved**：经 `schedule()` / `context_switch` 后返回 **`handle_exception`/`handle_el0_syscall` 时 x2 可能不再是原指针**。用户任务在 TCB 存 **`el0_trap_frame`**（`El0Sync`/`El0Irq` 入口写入）。syscall 与 EL0 IRQ 返回前把 TCB 的 **`saved_elr` / `saved_spsr` / `saved_sp_el0`** 写回 **内存 trap 帧**（+248/+256/+264），保证桩的 `ldr`/`msr` 与 TCB 一致（仅 `msr` 不写回帧会被桩覆盖）。 |
 | **相关** | `sys_endpoint_recv` 在 `block()` 之后不再额外 `schedule()`，避免不必要的抢占交错（与 trap 修复正交，但利于 IPC 握手稳定）。 |
 
 ---
