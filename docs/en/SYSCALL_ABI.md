@@ -1,4 +1,4 @@
-# Syscall ABI (DRAFT-1.0 · M5 tighten)
+# Syscall ABI (DRAFT-1.0 · M7 Phase 1 tighten)
 
 > **[中文](../系统调用ABI.md)** — Chinese source.
 
@@ -65,12 +65,18 @@ Semantics follow **`kernel/src/syscall.rs`**.
 | 5 | `SYS_SLEEP` | `ms` | `0` |
 | 6 | `SYS_ENDPOINT_CREATE` | — | endpoint id; table full → `ENOMEM` |
 | 7 | `SYS_ENDPOINT_DESTROY` | `id` | `0` on success; `EINVAL` / `ENOENT` / `EPERM` |
-| 8 | `SYS_ENDPOINT_CALL` | `id`, `msg` (MVP: low **32** bits) | success: **32**-bit reply sign-extended; no peer **`EAGAIN` (-11)** |
-| 9 | `SYS_ENDPOINT_RECV` | `id` | success: `(client_id << 32) \| request` (**32** bits each); no message **`EAGAIN` (-11)** |
-| 10 | `SYS_ENDPOINT_REPLY` | `id`, `client_id`, `msg` (MVP: low **32** bits) | `0` on success |
+| 8 | `SYS_ENDPOINT_CALL` | `id`, `msg` (**Phase 1:** kernel stores `msg & ENDPOINT_INLINE_REQ_MASK`; see §4.1) | **`u64`** value from `reply`; **blocks** when no rendezvous peer yet |
+| 9 | `SYS_ENDPOINT_RECV` | `id` | success: `hawthorn_syscall_abi::endpoint_recv_pack(client_id, request)` (**32**-bit task id + **32**-bit request); **blocks** when no pending `call` |
+| 10 | `SYS_ENDPOINT_REPLY` | `id`, `client_id`, `msg` | `0` on success; `msg` is a full **`u64`** delivered to the woken `call` |
 | 11 | `SYS_ABI_INFO` | ignored | §3 |
 
 `12..=63`: **unassigned** → **`ENOSYS`**.
+
+### 4.1 M7 Phase 1: inline endpoint scalar
+
+- **`ENDPOINT_INLINE_REQ_MASK`** (`0xFFFF_FFFF`): the request seen after `call` / in `recv` is **`msg & ENDPOINT_INLINE_REQ_MASK`** (same definition in `hawthorn_syscall_abi`).
+- **`endpoint_recv_pack` / `endpoint_recv_unpack`**: decode a successful **`SYS_ENDPOINT_RECV`** return (high **32** bits `client_id`, low **32** bits request).
+- **User AArch64**: `hawthorn_syscall_abi::user` provides thin `SVC #0` wrappers (`raw_syscall6`, `sys_*`).
 
 ---
 
@@ -84,7 +90,7 @@ Semantics follow **`kernel/src/syscall.rs`**.
 
 ## 6. User stubs
 
-- Call only through **`hawthorn_syscall_abi`** or generated wrappers; **do not** link private kernel symbols.  
+- Call only through **`hawthorn_syscall_abi`** (`user` submodule + constants / `pack` helpers); **do not** link private kernel symbols.  
 - Matches [ARCHITECTURE.md §8](./ARCHITECTURE.md).
 
 ---

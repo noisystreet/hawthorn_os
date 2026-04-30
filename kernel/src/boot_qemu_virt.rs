@@ -5,10 +5,7 @@
 use core::arch::asm;
 use core::fmt;
 
-use hawthorn_syscall_abi::{
-    SYS_ABI_INFO, SYS_ENDPOINT_CALL, SYS_ENDPOINT_CREATE, SYS_ENDPOINT_DESTROY, SYS_ENDPOINT_RECV,
-    SYS_ENDPOINT_REPLY, SYS_GETPID, SYS_WRITE,
-};
+use hawthorn_syscall_abi::{endpoint_recv_unpack, user};
 
 use crate::user_layout::{USER_CODE_BASE, USER_STACK_TOP};
 
@@ -211,30 +208,10 @@ pub extern "C" fn kernel_main() -> ! {
     extern "C" fn task_d() {
         crate::println!("[task D] testing syscall via SVC...");
 
-        let pid: u64;
-        unsafe {
-            let nr = SYS_GETPID;
-            asm!(
-                "mov x8, {nr}",
-                "svc #0",
-                "mov {out}, x0",
-                nr = in(reg) nr,
-                out = out(reg) pid,
-            );
-        }
+        let pid = user::sys_getpid();
         crate::println!("[task D] SYS_getpid returned {}", pid);
 
-        let abi: u64;
-        unsafe {
-            let nr = SYS_ABI_INFO;
-            asm!(
-                "mov x8, {nr}",
-                "svc #0",
-                "mov {out}, x0",
-                nr = in(reg) nr,
-                out = out(reg) abi,
-            );
-        }
+        let abi = user::sys_abi_info();
         crate::println!(
             "[task D] SYS_ABI_INFO word={:#x} version={} caps={:#x} (expect version {})",
             abi,
@@ -244,41 +221,10 @@ pub extern "C" fn kernel_main() -> ! {
         );
 
         let msg = b"hello from SVC write!\n";
-        let len = msg.len() as u64;
-        let ptr = msg.as_ptr() as u64;
-        let ret: u64;
-        unsafe {
-            let nr = SYS_WRITE;
-            asm!(
-                "mov x8, {nr}",
-                "mov x0, #1",
-                "mov x1, {ptr}",
-                "mov x2, {len}",
-                "svc #0",
-                "mov {ret}, x0",
-                nr = in(reg) nr,
-                ptr = in(reg) ptr,
-                len = in(reg) len,
-                ret = out(reg) ret,
-            );
-        }
+        let ret = user::sys_write(1, msg.as_ptr(), msg.len() as u64);
         crate::println!("[task D] SYS_write returned {}", ret);
 
-        let bad_ret: u64;
-        unsafe {
-            let nr = SYS_WRITE;
-            asm!(
-                "mov x8, {nr}",
-                "mov x0, #1",
-                "mov x1, {ptr}",
-                "mov x2, #8",
-                "svc #0",
-                "mov {ret}, x0",
-                nr = in(reg) nr,
-                ptr = in(reg) 0xdead_beef_u64,
-                ret = out(reg) bad_ret,
-            );
-        }
+        let bad_ret = user::sys_write(1, 0xdead_beef as *const u8, 8);
         crate::println!(
             "[task D] SYS_write(bad ptr) returned {} (expect -14 EFAULT)",
             bad_ret as i64
@@ -287,20 +233,7 @@ pub extern "C" fn kernel_main() -> ! {
         let endpoint_id = 0u64;
         crate::println!("[task D] using endpoint {} (blocking call)", endpoint_id);
 
-        let call_ret: u64;
-        unsafe {
-            let nr = SYS_ENDPOINT_CALL;
-            asm!(
-                "mov x8, {nr}",
-                "mov x0, {id}",
-                "mov x1, #42",
-                "svc #0",
-                "mov {ret}, x0",
-                nr = in(reg) nr,
-                id = in(reg) endpoint_id,
-                ret = out(reg) call_ret,
-            );
-        }
+        let call_ret = user::sys_endpoint_call(endpoint_id, 42);
         crate::println!(
             "[task D] endpoint_call returned {} (expect 43)",
             call_ret as i64
@@ -311,72 +244,21 @@ pub extern "C" fn kernel_main() -> ! {
     extern "C" fn task_e() {
         crate::println!("[task E] endpoint server start");
 
-        let endpoint_id: u64;
-        unsafe {
-            let nr = SYS_ENDPOINT_CREATE;
-            asm!(
-                "mov x8, {nr}",
-                "svc #0",
-                "mov {id}, x0",
-                nr = in(reg) nr,
-                id = out(reg) endpoint_id,
-            );
-        }
+        let endpoint_id = user::sys_endpoint_create();
         crate::println!("[task E] endpoint_create returned {}", endpoint_id);
 
-        let packed: u64;
-        unsafe {
-            let nr = SYS_ENDPOINT_RECV;
-            asm!(
-                "mov x8, {nr}",
-                "mov x0, {id}",
-                "svc #0",
-                "mov {out}, x0",
-                nr = in(reg) nr,
-                id = in(reg) endpoint_id,
-                out = out(reg) packed,
-            );
-        }
-        let client_id = (packed >> 32) & 0xFFFF_FFFF;
-        let request = packed & 0xFFFF_FFFF;
+        let packed = user::sys_endpoint_recv(endpoint_id);
+        let (client_id, request) = endpoint_recv_unpack(packed);
         crate::println!(
             "[task E] endpoint_recv got client={} msg={}",
             client_id,
             request
         );
 
-        let reply_ret: u64;
-        unsafe {
-            let nr = SYS_ENDPOINT_REPLY;
-            asm!(
-                "mov x8, {nr}",
-                "mov x0, {id}",
-                "mov x1, {client}",
-                "mov x2, {reply}",
-                "svc #0",
-                "mov {ret}, x0",
-                nr = in(reg) nr,
-                id = in(reg) endpoint_id,
-                client = in(reg) client_id,
-                reply = in(reg) (request + 1),
-                ret = out(reg) reply_ret,
-            );
-        }
+        let reply_ret = user::sys_endpoint_reply(endpoint_id, client_id, request + 1);
         crate::println!("[task E] endpoint_reply returned {}", reply_ret as i64);
 
-        let destroy_ret: u64;
-        unsafe {
-            let nr = SYS_ENDPOINT_DESTROY;
-            asm!(
-                "mov x8, {nr}",
-                "mov x0, {id}",
-                "svc #0",
-                "mov {ret}, x0",
-                nr = in(reg) nr,
-                id = in(reg) endpoint_id,
-                ret = out(reg) destroy_ret,
-            );
-        }
+        let destroy_ret = user::sys_endpoint_destroy(endpoint_id);
         crate::println!("[task E] endpoint_destroy returned {}", destroy_ret as i64);
 
         crate::println!("[task E] done");

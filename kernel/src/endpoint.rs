@@ -17,7 +17,7 @@
 //! - `reply(ep, client, msg)` → stores the reply value and unblocks the
 //!   waiting client task.
 
-use hawthorn_syscall_abi::Errno;
+use hawthorn_syscall_abi::{endpoint_recv_pack, Errno, ENDPOINT_INLINE_REQ_MASK};
 
 #[cfg(all(target_arch = "aarch64", target_os = "none"))]
 use crate::task::TaskId;
@@ -209,7 +209,7 @@ fn call_with_caller(id: u64, msg: u64, caller: TaskId) -> CallResult {
 
         ep.has_pending_call = true;
         ep.pending_client = caller;
-        ep.pending_msg = msg;
+        ep.pending_msg = msg & ENDPOINT_INLINE_REQ_MASK;
         CALLER_BLOCKED[caller_idx] = true;
 
         if ep.blocked_receiver.0 != INVALID_TASK_ID {
@@ -253,7 +253,7 @@ fn recv_with_caller(id: u64, caller: TaskId) -> RecvResult {
 
         if ep.has_pending_call {
             let client = ep.pending_client.0 as u64;
-            let msg = ep.pending_msg & 0xFFFF_FFFF;
+            let msg = ep.pending_msg & ENDPOINT_INLINE_REQ_MASK;
             ep_trace!(
                 "[endpoint] recv got pending call: client={} msg={}",
                 client,
@@ -262,7 +262,7 @@ fn recv_with_caller(id: u64, caller: TaskId) -> RecvResult {
             ep.has_pending_call = false;
             ep.pending_client = TaskId(INVALID_TASK_ID);
             ep.pending_msg = 0;
-            return RecvResult::Message((client << 32) | msg);
+            return RecvResult::Message(endpoint_recv_pack(client, msg));
         }
 
         ep_trace!(
@@ -479,6 +479,19 @@ mod tests {
             let packed = recv_with_caller(endpoint as u64, TaskId(1)).unwrap_message();
             assert_eq!(packed >> 32, 2);
             assert_eq!(packed & 0xFFFF_FFFF, 0xABCD);
+        });
+    }
+
+    #[test]
+    fn call_masks_request_to_low_32_bits() {
+        with_table(|| {
+            let endpoint = create_with_owner(TaskId(1)).unwrap();
+            assert!(matches!(
+                call_with_caller(endpoint as u64, 0x1_0000_0042, TaskId(2)),
+                CallResult::Blocked
+            ));
+            let packed = recv_with_caller(endpoint as u64, TaskId(1)).unwrap_message();
+            assert_eq!(packed & 0xFFFF_FFFF, 0x42);
         });
     }
 }

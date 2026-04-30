@@ -38,6 +38,16 @@
 //!
 //! Low **32** bits: [`ABI_VERSION`]. High **32** bits: OR of [`ABI_CAP_*`] flags.
 //! This is a **non-negative** word (not an [`Errno`] encoding).
+//!
+//! ## IPC (M7 Phase 1) and user stubs
+//!
+//! Inline endpoint requests use [`ENDPOINT_INLINE_REQ_MASK`] on **`call`** and in the
+//! low half of [`endpoint_recv_pack`]. **`SYS_ENDPOINT_REPLY`** / successful
+//! **`SYS_ENDPOINT_CALL`** return a full **`u64`** reply word.
+//!
+//! On **`target_arch = "aarch64"`**, [`user`] provides thin `SVC #0` wrappers
+//! (`raw_syscall6`, `sys_*`). Other targets compile an empty [`user`] module so
+//! hosts can type-check shared constants and `pack`/`unpack` in unit tests.
 
 #![cfg_attr(not(test), no_std)]
 
@@ -69,6 +79,25 @@ pub const SYS_ABI_INFO: u64 = 11;
 
 /// Maximum number of scalar arguments passed in registers for this ABI (`x0`–`x5`).
 pub const SYSCALL_MAX_ARGS: usize = 6;
+
+/// **Phase 1 IPC:** inline request scalar for `SYS_ENDPOINT_CALL` / low half of `SYS_ENDPOINT_RECV`.
+///
+/// The kernel applies this mask when storing the pending request so `recv` and `call` agree.
+pub const ENDPOINT_INLINE_REQ_MASK: u64 = 0xFFFF_FFFF;
+
+/// Packs `(client_id, request)` into the **`u64`** success return of [`SYS_ENDPOINT_RECV`](crate::SYS_ENDPOINT_RECV).
+#[inline]
+pub fn endpoint_recv_pack(client_id: u64, request: u64) -> u64 {
+    (client_id << 32) | (request & ENDPOINT_INLINE_REQ_MASK)
+}
+
+/// Unpacks a [`endpoint_recv_pack`] word: high **32** bits = `client_id`, low **32** = masked `request`.
+#[inline]
+pub fn endpoint_recv_unpack(packed: u64) -> (u64, u64) {
+    let client_id = (packed >> 32) & ENDPOINT_INLINE_REQ_MASK;
+    let request = packed & ENDPOINT_INLINE_REQ_MASK;
+    (client_id, request)
+}
 
 pub const MAX_ERRNO: u64 = 4095;
 
@@ -156,6 +185,12 @@ pub fn abi_info_word() -> u64 {
     ABI_VERSION | (ABI_CAP_EL0_USER_AS << 32)
 }
 
+#[cfg(target_arch = "aarch64")]
+pub mod user;
+
+#[cfg(not(target_arch = "aarch64"))]
+pub mod user {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -214,5 +249,20 @@ mod tests {
         }
         assert_eq!(errno_from_ret((-999i64) as u64), None);
         assert_eq!(errno_from_ret(0), None);
+    }
+
+    #[test]
+    fn endpoint_recv_pack_unpack_roundtrip() {
+        let packed = endpoint_recv_pack(2, 0x1234);
+        assert_eq!(packed >> 32, 2);
+        assert_eq!(packed & ENDPOINT_INLINE_REQ_MASK, 0x1234);
+        let (c, r) = endpoint_recv_unpack(packed);
+        assert_eq!((c, r), (2, 0x1234));
+    }
+
+    #[test]
+    fn endpoint_recv_pack_masks_request() {
+        let packed = endpoint_recv_pack(0xABC, 0xDEAD_BEEF);
+        assert_eq!(endpoint_recv_unpack(packed), (0xABC, 0xDEAD_BEEF));
     }
 }

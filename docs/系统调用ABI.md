@@ -1,4 +1,4 @@
-# 系统调用 ABI（DRAFT-1.0 · M5 收束）
+# 系统调用 ABI（DRAFT-1.0 · M7 Phase 1 收束）
 
 > **[English](./en/SYSCALL_ABI.md)** — English mirror.
 
@@ -65,12 +65,18 @@
 | 5 | `SYS_SLEEP` | `ms` | `0` |
 | 6 | `SYS_ENDPOINT_CREATE` | — | endpoint id；满表 `ENOMEM` |
 | 7 | `SYS_ENDPOINT_DESTROY` | `id` | 成功 `0`；`EINVAL`/`ENOENT`/`EPERM` |
-| 8 | `SYS_ENDPOINT_CALL` | `id`, `msg`（MVP：低 **32** 位） | 成功为 `reply` 的 **32** 位有符号扩展值；无对手就绪 **`EAGAIN`（-11）** |
-| 9 | `SYS_ENDPOINT_RECV` | `id` | 成功为 `(client_id << 32) \| request`（各 **32** 位）；无消息 **`EAGAIN`（-11）** |
-| 10 | `SYS_ENDPOINT_REPLY` | `id`, `client_id`, `msg`（MVP：低 **32** 位） | 成功 `0` |
+| 8 | `SYS_ENDPOINT_CALL` | `id`, `msg`（**Phase 1**：内核将 `msg` 与 **`ENDPOINT_INLINE_REQ_MASK`** 按位与后入队；见 §4.1） | **`reply` 写入的完整 `u64`**；对手未就绪时 **阻塞**（rendezvous） |
+| 9 | `SYS_ENDPOINT_RECV` | `id` | 成功为 `hawthorn_syscall_abi::endpoint_recv_pack(client_id, request)`（**32** 位 task id + **32** 位请求）；无 **`call`** 时 **阻塞** |
+| 10 | `SYS_ENDPOINT_REPLY` | `id`, `client_id`, `msg` | 成功 `0`；`msg` **完整 `u64`** 交给唤醒后的 `call` |
 | 11 | `SYS_ABI_INFO` | 忽略 | 见 §3 |
 
 `12..=63`：**未分配**，当前分派返回 **`ENOSYS`**。
+
+### 4.1 M7 Phase 1：端点内联标量
+
+- **`ENDPOINT_INLINE_REQ_MASK`**（`0xFFFF_FFFF`）：`call` 与 `recv` 所见的请求载荷均为 **`msg & ENDPOINT_INLINE_REQ_MASK`**（与 `hawthorn_syscall_abi` 一致）。
+- **`endpoint_recv_pack` / `endpoint_recv_unpack`**：解码 `SYS_ENDPOINT_RECV` 的成功返回值（高 **32** 位 `client_id`，低 **32** 位请求）。
+- **用户态 AArch64**：`hawthorn_syscall_abi::user` 提供 `SVC #0` 薄封装（`raw_syscall6`、`sys_*`）。
 
 ---
 
@@ -84,7 +90,7 @@
 
 ## 6. 用户态接入
 
-- 仅通过 **`hawthorn_syscall_abi` crate**（或由此生成的封装）发起调用；**禁止**链接内核私有符号。
+- 仅通过 **`hawthorn_syscall_abi` crate**（`user` 子模块 + 常量/`pack`）发起调用；**禁止**链接内核私有符号。
 - 与 [架构.md §8](./架构.md) 依赖约束一致。
 
 ---
