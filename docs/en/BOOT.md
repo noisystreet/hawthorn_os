@@ -1,6 +1,6 @@
 # Boot and boot info block (skeleton)
 
-> **[中文](../BOOT.md)** — Chinese source of this document.
+> **[中文](../引导.md)** — Chinese source of this document.
 
 Binary contract between **Bootloader → Hawthorn (山楂) kernel**; addresses and Rockchip flow: [PORTING.md](./PORTING.md) and BSP.
 

@@ -3,7 +3,7 @@
 //! Host integration tests: link `hawthorn_kernel` as a library (crate-root `tests/`),
 //! distinct from in-module `#[cfg(test)]` unit tests.
 //!
-//! Layering: see `docs/TESTING.md` / `docs/en/TESTING.md` (L2).
+//! Layering: see `docs/测试.md` / `docs/en/TESTING.md` (L2).
 
 use hawthorn_kernel::task_policy::{pick_next_index, SchedState, TaskView};
 

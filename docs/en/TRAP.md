@@ -1,6 +1,6 @@
 # Exception / Trap Design
 
-> **[中文](../TRAP.md)** — Chinese source of this document.
+> **[中文](../陷入与异常.md)** — Chinese source of this document.
 
 This document describes the AArch64 exception vector table, trap entry, context save, and exception dispatch design for the **Hawthorn (山楂) microkernel**. Current code covers **EL1** paths and **EL0→EL1** **SVC / IRQ** (for **syscalls** and **simulated EL0 user tasks**); **EL2 / EL3** switching remains future work.
 

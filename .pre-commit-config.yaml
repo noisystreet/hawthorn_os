@@ -1,6 +1,6 @@
 # https://pre-commit.com
 # pre-commit：typos / fmt / clippy / test（与 CI 一致）
-# commit-msg：Conventional Commits 英文首行 + 单独一行中文（见 docs/COMMIT_CONVENTIONS.md）
+# commit-msg：Conventional Commits 英文首行 + 单独一行中文（见 docs/提交约定.md）
 default_install_hook_types:
   - pre-commit
   - commit-msg

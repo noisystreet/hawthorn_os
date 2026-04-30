@@ -2,7 +2,7 @@
 
 > **[English](./en/PR_ISSUE_PLAN.md)** — English mirror of this document.
 
-本文档把 **GitHub Issue** 与建议的 **PR 顺序** 固定下来，便于开分支、写 PR 描述时引用 `Closes #…` / `Refs #…`。能力级 backlog 仍以 [TODO.md](./TODO.md) 为准。
+本文档把 **GitHub Issue** 与建议的 **PR 顺序** 固定下来，便于开分支、写 PR 描述时引用 `Closes #…` / `Refs #…`。能力级 backlog 仍以 [待办.md](./待办.md) 为准。
 
 ---
 
@@ -29,8 +29,8 @@
 
 1. **一个 PR 尽量对应一个 issue**；大改可拆 PR，但每个 PR 仍应 `Closes #n` 或 `Refs #n`。
 2. PR 描述使用仓库模板 [.github/pull_request_template.md](../.github/pull_request_template.md)，在 **相关 Issue** 填写例如：`Closes #1`。
-3. **提交信息**：`docs/COMMIT_CONVENTIONS.md` — 第 1 行英文 Conventional Commits，第 2 行中文对应。
-4. **标签**：内核相关 issue 已使用 `kernel` + `enhancement`；新 issue 标题建议继续带 **`[kernel]`**、`[IPC]` 等前缀（与 [TODO.md](./TODO.md) 说明一致）。
+3. **提交信息**：`docs/提交约定.md` — 第 1 行英文 Conventional Commits，第 2 行中文对应。
+4. **标签**：内核相关 issue 已使用 `kernel` + `enhancement`；新 issue 标题建议继续带 **`[kernel]`**、`[IPC]` 等前缀（与 [待办.md](./待办.md) 说明一致）。
 
 ---
 

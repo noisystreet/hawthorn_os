@@ -144,4 +144,4 @@ cat /tmp/hawthorn_serial.log
 
 ## 另见
 
-- bring-up 之后与 **syscall 返回值、`SYS_write` 指针语义、用户任务资源回收** 相关的修复见 [BUGFIX_NOTES.md](./BUGFIX_NOTES.md)。
+- bring-up 之后与 **syscall 返回值、`SYS_write` 指针语义、用户任务资源回收** 相关的修复见 [缺陷修复笔记.md](./缺陷修复笔记.md)。

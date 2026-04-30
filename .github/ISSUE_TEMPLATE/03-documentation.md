@@ -10,11 +10,11 @@ labels:
 
 - [ ] 中文 `docs/*.md` 修正或补充
 - [ ] 英文 `docs/en/*.md` 修正或补充
-- [ ] **中英文同步**（需同时改 `docs/` 与 `docs/en/` 同名文件）
+- [ ] **中英文同步**（需同时改中文 `docs/<中文名>.md` 与成对 `docs/en/<English>.md`）
 
 ## 涉及文件
 
-<!-- 例如：docs/PORTING.md、docs/en/PORTING.md -->
+<!-- 例如：docs/移植.md、docs/en/PORTING.md -->
 
 ## 当前问题或期望内容
 

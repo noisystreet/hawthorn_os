@@ -1,4 +1,4 @@
-//! 山楂（hawthorn）微内核 crate。QEMU `virt` 最小引导见 `boot_qemu_virt` 模块（`aarch64-unknown-none`）；设计见 `docs/KERNEL.md` 与 `docs/ARCHITECTURE.md`。
+//! 山楂（hawthorn）微内核 crate。QEMU `virt` 最小引导见 `boot_qemu_virt` 模块（`aarch64-unknown-none`）；设计见 `docs/内核.md` 与 `docs/架构.md`。
 #![cfg_attr(not(test), no_std)]
 
 #[cfg(all(target_arch = "aarch64", target_os = "none"))]

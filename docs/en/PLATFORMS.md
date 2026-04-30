@@ -1,6 +1,6 @@
 # Supported platforms and tiers
 
-> **[中文](../PLATFORMS.md)** — Chinese source of this document.
+> **[中文](../平台.md)** — Chinese source of this document.
 
 **Hawthorn (山楂)** uses hardware **tiers** by maturity. Current plan:
 

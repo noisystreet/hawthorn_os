@@ -1,7 +1,7 @@
 //! Minimal AArch64 image for `qemu-system-aarch64 -machine virt`.
 //!
 //! Reuses PL011 UART driver and BSS zeroing from `hawthorn_kernel::boot_qemu_virt`.
-//! See `scripts/run_qemu_minimal.sh` and `docs/PORTING.md`.
+//! See `scripts/run_qemu_minimal.sh` and `docs/移植.md`.
 
 #![no_std]
 #![no_main]

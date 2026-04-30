@@ -1,6 +1,6 @@
 # Glossary
 
-> **[中文](../GLOSSARY.md)** — Chinese source of this document.
+> **[中文](../术语.md)** — Chinese source of this document.
 
 | Term | Short definition |
 |------|-------------------|

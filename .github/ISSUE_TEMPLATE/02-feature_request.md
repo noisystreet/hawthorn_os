@@ -16,7 +16,7 @@ labels:
 
 ## 与现有文档的关系
 
-<!-- 是否涉及 docs/ARCHITECTURE.md、docs/KERNEL.md 等；是否需更新开放决策 -->
+<!-- 是否涉及 docs/架构.md、docs/内核.md 等；是否需更新开放决策 -->
 
 ## 验收标准（可选）
 

@@ -10,19 +10,20 @@ alwaysApply: false
 
 ## 布局
 
-- **中文正文**：`docs/<名称>.md`（与当前仓库一致）。
-- **英文镜像**：`docs/en/<名称>.md`，**文件名与 `docs/` 下中文稿一一对应**（如 `ARCHITECTURE.md`、`KERNEL.md`）。
-- **总览页成对**：`docs/README.md`（中文索引）与 `docs/en/README.md`（英文索引）**同步维护**，二者不与单篇技术文档同名冲突。
-- **`docs/en/README.md`**：英文镜像区说明 + 全表索引。
+- **中文正文**：`docs/<中文文件名>.md`（如 `架构.md`、`内核.md`；总览为 `docs/README.md`）。
+- **英文镜像**：`docs/en/<English_basename>.md`（如 `ARCHITECTURE.md`、`KERNEL.md`），与中文稿 **主题成对**，文件名保持英文以便工具链与外链。
+- **成对关系**：以 **`docs/README.md`** 与 **`docs/en/README.md`** 中的对照表为准（不要求中英文 **同名**）。
+- **`docs/en/README.md`**：英文索引区说明 + 全表（英文文件名 ↔ 中文路径）。
 
 ## 修改纪律
 
-- 对中文文档的 **实质变更**（段落、表格、列表、代码块、链接、开放决策状态）须在 **同一 PR / 同一轮 Agent 修改** 中更新对应的 **`docs/en/<同名>.md`**。
-- 若英文稿尚不存在：在 **同一变更** 中 **新建** `docs/en/<同名>.md`，至少包含 **同级标题骨架** 与首段说明；可暂用 `<!-- EN translation: in progress -->` 标注未译段，但 **不得** 长期只更新中文、不建或不改英文镜像。
-- **新建** 中文文档时，必须 **同时** 添加 `docs/New.md` 与 `docs/en/New.md`（英文可为骨架）。
+- 对中文文档的 **实质变更**（段落、表格、列表、代码块、链接、开放决策状态）须在 **同一 PR / 同一轮 Agent 修改** 中更新对应的 **`docs/en/<对应英文稿>.md`**。
+- 若英文稿尚不存在：在 **同一变更** 中 **新建** `docs/en/<Name>.md`，至少包含 **同级标题骨架** 与首段说明；可暂用 `<!-- EN translation: in progress -->` 标注未译段，但 **不得** 长期只更新中文、不建或不改英文镜像。
+- **新建** 中文主题时：同时添加 `docs/<中文名>.md` 与 `docs/en/<EnglishName>.md`（英文可为骨架），并 **更新** 两个 README 对照表中的行。
 - 根 **`README.md`** 若含中英双语或指向 `docs/`，变更时同步另一侧或 `docs/en/README.md`，避免信息只落在一侧。
 
 ## 术语与链接
 
 - 英文稿使用 **hawthorn**、**hawthorn_kernel**、**Shānzhā / Hawthorn (山楂)** 等与中文稿一致；技术链接（crate、路径、CI）两种语言保持 **同一目标**。
-- 中文稿内链 `./FOO.md` 指向中文；英文稿内链在同一目录内用 **`./FOO.md`** 指向 **`docs/en/`** 下对应英文文件。跨语言可在文首加一行互链：`[English](en/ARCHITECTURE.md)` / `[中文](../ARCHITECTURE.md)`。
+- 中文稿内链 `./某某.md` 指向中文文件；文首互链：`[English](./en/ARCHITECTURE.md)` / `[中文](../架构.md)`。
+- 英文稿内链 `./FOO.md` 指向 **`docs/en/`** 内同名英文文件；指向中文稿时用 **`../架构.md`** 等形式。

@@ -1,1 +1,1 @@
-# 裸机 AArch64：链接脚本 `kernel/link-qemu_virt.ld` 由 `kernel/build.rs` 与 `qemu_minimal/build.rs` 注入；其余见 docs/PORTING.md。
+# 裸机 AArch64：链接脚本 `kernel/link-qemu_virt.ld` 由 `kernel/build.rs` 与 `qemu_minimal/build.rs` 注入；其余见 docs/移植.md。

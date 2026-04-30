@@ -2,7 +2,7 @@
 
 //! Fixed low virtual-memory layout for the QEMU `virt` EL0 MVP.
 //!
-//! See [KERNEL.md](../../docs/KERNEL.md) §3.8. Syscall copy-in validation
+//! See [KERNEL.md](../../docs/内核.md) §3.8. Syscall copy-in validation
 //! (`syscall` module) only allows user buffers that lie **entirely** in the
 //! code window or the stack window — not the unmapped hole between them.
 

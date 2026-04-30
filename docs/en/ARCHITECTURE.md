@@ -1,6 +1,6 @@
 # Hawthorn / 山楂 — Architecture
 
-> **[中文](../ARCHITECTURE.md)** — Chinese source of this document.
+> **[中文](../架构.md)** — Chinese source of this document.
 
 This document describes goals, layering, major subsystems, and roadmap for **Hawthorn**, a **Rust** embedded OS (**Chinese name: 山楂**; code name **hawthorn**), aimed at **robotics** and **smart hardware** that need predictability, isolation, and maintainability.
 

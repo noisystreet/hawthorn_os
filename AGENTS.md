@@ -14,21 +14,21 @@ This file orients **AI assistants, CI bots, and contributors** using agent-style
 | Tier-1 hardware | [Orange Pi 5](https://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/details/Orange-Pi-5.html), SoC **RK3588**, AArch64 + MMU |
 | Kernel crate | **`hawthorn_kernel`** in `kernel/` (workspace member) |
 
-Drivers, network stacks, and file systems are intended to run as **user services** (`servers/` — planned), not inside the microkernel. See `docs/KERNEL.md` / `docs/en/KERNEL.md`.
+Drivers, network stacks, and file systems are intended to run as **user services** (`servers/` — planned), not inside the microkernel. See `docs/内核.md` / `docs/en/KERNEL.md`.
 
 ---
 
 ## 2. Read first (before large edits)
 
-1. `docs/ARCHITECTURE.md` or `docs/en/ARCHITECTURE.md` — goals, layering, roadmap, open decisions.  
-2. `docs/KERNEL.md` or `docs/en/KERNEL.md` — kernel modules, IPC, capabilities, RK3588 notes.  
-3. `docs/TESTING.md` or `docs/en/TESTING.md` — test layers (L1–L4), QEMU scripts vs `cargo test`, CI mapping.  
-4. `docs/CODE_STYLE.md` — Rust / `no_std` / `unsafe` / Clippy expectations.  
+1. `docs/架构.md` or `docs/en/ARCHITECTURE.md` — goals, layering, roadmap, open decisions.  
+2. `docs/内核.md` or `docs/en/KERNEL.md` — kernel modules, IPC, capabilities, RK3588 notes.  
+3. `docs/测试.md` or `docs/en/TESTING.md` — test layers (L1–L4), QEMU scripts vs `cargo test`, CI mapping.  
+4. `docs/代码风格.md` — Rust / `no_std` / `unsafe` / Clippy expectations.  
 5. `CONTRIBUTING.md` — license, pre-commit, security reporting.
 
-**Bilingual rule:** substantive doc changes must update **both** `docs/<name>.md` and `docs/en/<name>.md` in the same change (see `.cursor/rules/hawthorn-docs-bilingual.mdc`). Hub pages: `docs/README.md` ↔ `docs/en/README.md`.
+**Bilingual rule:** substantive doc changes must update **both** the Chinese file under `docs/<中文名>.md` and the paired **`docs/en/<EnglishName>.md`** in the same change (see `.cursor/rules/hawthorn-docs-bilingual.mdc`). Hub pages: `docs/README.md` ↔ `docs/en/README.md`.
 
-**PR / issue milestone (minimal kernel on QEMU `virt`):** see [`docs/PR_ISSUE_PLAN.md`](docs/PR_ISSUE_PLAN.md) (Chinese) and [`docs/en/PR_ISSUE_PLAN.md`](docs/en/PR_ISSUE_PLAN.md) (English) — ordered GitHub issues **#1–#4**, meta **#5**.
+**PR / issue milestone (minimal kernel on QEMU `virt`):** see [`docs/PR与议题计划.md`](docs/PR与议题计划.md) (Chinese) and [`docs/en/PR_ISSUE_PLAN.md`](docs/en/PR_ISSUE_PLAN.md) (English) — ordered GitHub issues **#1–#4**, meta **#5**.
 
 ---
 
@@ -67,9 +67,9 @@ bash scripts/verify_kernel_qemu_virt_serial.sh
 bash scripts/verify_kernel_qemu_virt_el0_serial.sh
 ```
 
-**L3 (QEMU):** requires `qemu-system-aarch64` and `socat` (see CI). Strategy: `docs/TESTING.md` / `docs/en/TESTING.md`.
+**L3 (QEMU):** requires `qemu-system-aarch64` and `socat` (see CI). Strategy: `docs/测试.md` / `docs/en/TESTING.md`.
 
-Optional: `pre-commit install` then each `git commit` runs **typos** / **fmt** / **clippy** (with cognitive complexity lint) / **test** (`pre-commit` stage) and validates the **commit message first line** (**`commit-msg`**, Conventional Commits — see `docs/COMMIT_CONVENTIONS.md`). Optional: `git config commit.template .gitmessage` (see `CONTRIBUTING.md`).
+Optional: `pre-commit install` then each `git commit` runs **typos** / **fmt** / **clippy** (with cognitive complexity lint) / **test** (`pre-commit` stage) and validates the **commit message first line** (**`commit-msg`**, Conventional Commits — see `docs/提交约定.md`). Optional: `git config commit.template .gitmessage` (see `CONTRIBUTING.md`).
 
 ---
 
@@ -81,8 +81,8 @@ Project-specific agent instructions: **`.cursor/rules/`** (`hawthorn-core.mdc`, 
 
 ## 6. Communication & comments
 
-- User-facing explanations for this repo are often **Simplified Chinese**; **public Rust `///` API docs** should stay **English** where possible (`docs/CODE_STYLE.md`).  
-- Commit messages: follow `docs/COMMIT_CONVENTIONS.md` (Conventional Commits).
+- User-facing explanations for this repo are often **Simplified Chinese**; **public Rust `///` API docs** should stay **English** where possible (`docs/代码风格.md`).  
+- Commit messages: follow `docs/提交约定.md` (Conventional Commits).
 
 ---
 

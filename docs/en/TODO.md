@@ -1,8 +1,8 @@
 # Hawthorn / 山楂 — New features and capability extensions (TODO)
 
-> **[中文](../TODO.md)** — Chinese source of this document.
+> **[中文](../待办.md)** — Chinese source of this document.
 
-This page lists **new runtime features and capabilities** planned for the repo. Background and constraints: [ARCHITECTURE.md](../ARCHITECTURE.md), [KERNEL.md](../KERNEL.md), [PORTING.md](../PORTING.md). Sub-items should be **splittable into issues**; track with `- [ ]` / `- [x]` in PRs.
+This page lists **new runtime features and capabilities** planned for the repo. Background and constraints: [架构.md](../架构.md), [内核.md](../内核.md), [移植.md](../移植.md). Sub-items should be **splittable into issues**; track with `- [ ]` / `- [x]` in PRs.
 
 ---
 
@@ -49,7 +49,7 @@ This page lists **new runtime features and capabilities** planned for the repo. 
 - [x] **Boot chain**: `_start` (asm) → stack / BSS → Rust `kernel_main` (or equivalent); align with `link-qemu_virt.ld` / future board scripts.
 - [x] **`#[panic_handler]`**: path for formatted or minimal panic output (UART or in-memory ring).
 - [x] **Vector table**: set `VBAR_ELx`; `sync` / `irq` / `fiq` / `SError` asm stubs; default hang or forward to Rust `handle_exception(reason)`.
-- [x] **EL choice**: docs + code agree (e.g. long-term EL1 vs start at EL2 then drop); cross-link [BOOT.md](../BOOT.md).
+- [x] **EL choice**: docs + code agree (e.g. long-term EL1 vs start at EL2 then drop); cross-link [引导.md](../引导.md).
 
 ---
 
@@ -70,7 +70,7 @@ This page lists **new runtime features and capabilities** planned for the repo. 
 ### SMP
 
 - [ ] **Boot CPU**: finish GIC, timers, global data before releasing APs.
-- [ ] **AP entry**: `spin-table` or PSCI — pick one and align with real-board assumptions in [PORTING.md](../PORTING.md).
+- [ ] **AP entry**: `spin-table` or PSCI — pick one and align with real-board assumptions in [移植.md](../移植.md).
 - [ ] **IPI**: spinlocks, cross-core TLB shootdown (later), migration (later).
 - [ ] **Per-core idle**: `wfi` / low-power placeholder and **load balancing** (later).
 
@@ -112,7 +112,7 @@ This page lists **new runtime features and capabilities** planned for the repo. 
 
 ### ABI versioning and numbering
 
-- [ ] In [SYSCALL_ABI.md](../SYSCALL_ABI.md): **number space**, **DRAFT-x.y**, and **STABLE-x** naming.
+- [ ] In [系统调用ABI.md](../系统调用ABI.md): **number space**, **DRAFT-x.y**, and **STABLE-x** naming.
 - [ ] **Register convention**: args in `x0–x7`, syscall number in `x8`, `ret`/`errno` model; differences vs AArch64 PCS explained.
 - [ ] **Version probe syscall**: returns `ABI_VERSION` and a feature bitmask (may be all zero at first).
 

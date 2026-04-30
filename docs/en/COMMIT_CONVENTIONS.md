@@ -1,6 +1,6 @@
 # Hawthorn / 山楂 — Commit conventions
 
-> **[中文](../COMMIT_CONVENTIONS.md)** — Chinese source of this document.
+> **[中文](../提交约定.md)** — Chinese source of this document.
 
 Git **commit messages**, **branches**, and **pull requests** for the **Hawthorn (山楂)** repo.
 

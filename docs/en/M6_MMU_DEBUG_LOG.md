@@ -1,6 +1,6 @@
 # M6 QEMU `virt` MMU bring-up — debug log and fix
 
-> **[中文](../M6_MMU_DEBUG_LOG.md)** — Chinese source (`docs/M6_MMU_DEBUG_LOG.md`)
+> **[中文](../M6_MMU调试日志.md)** — Chinese source (`docs/M6_MMU调试日志.md`)
 
 This document records symptoms, investigation, and the **resolved** AArch64 MMU bring-up for Hawthorn on QEMU `virt` (`scripts/verify_kernel_qemu_virt_serial.sh` passes).
 

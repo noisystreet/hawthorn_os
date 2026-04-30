@@ -36,4 +36,4 @@ labels:
 
 ## 可能相关的文档或模块
 
-<!-- 例如：docs/KERNEL.md、kernel/… -->
+<!-- 例如：docs/内核.md、kernel/… -->

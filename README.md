@@ -13,24 +13,25 @@
 
 ## 文档
 
-完整对照表见 **[docs/README.md](docs/README.md)**（中文路径 + `docs/en/` 英文镜像）。
+完整对照表见 **[docs/README.md](docs/README.md)**（`docs/` 中文文件名 + `docs/en/` 英文镜像）。
 
 | 文档 | 说明 |
 |------|------|
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 总体目标、分层、首发平台、演进与安全 |
-| [docs/KERNEL.md](docs/KERNEL.md) | 微内核模块、对象模型、IPC、RK3588 约束 |
-| [docs/PORTING.md](docs/PORTING.md) | 移植、构建前提、启动与内存布局占位 |
-| [docs/BOOT.md](docs/BOOT.md) | 启动信息块与引导阶段（骨架） |
-| [docs/SYSCALL_ABI.md](docs/SYSCALL_ABI.md) | 系统调用 ABI（骨架） |
-| [docs/PLATFORMS.md](docs/PLATFORMS.md) | 平台 Tier 列表 |
-| [docs/GLOSSARY.md](docs/GLOSSARY.md) | 术语表 |
-| [docs/API.md](docs/API.md) | 对外 API 索引（占位） |
-| [docs/CODE_STYLE.md](docs/CODE_STYLE.md) | Rust 代码风格 |
-| [docs/COMMIT_CONVENTIONS.md](docs/COMMIT_CONVENTIONS.md) | Git 提交与 PR 约定 |
-| [docs/TODO.md](docs/TODO.md) | 新功能与能力扩展（TODO 列表） |
-| [docs/PR_ISSUE_PLAN.md](docs/PR_ISSUE_PLAN.md) | 当前里程碑：PR 与 GitHub Issue 顺序（含链接） |
+| [docs/架构.md](docs/架构.md) | 总体目标、分层、首发平台、演进与安全 |
+| [docs/测试.md](docs/测试.md) | 测试分层（L1–L4）与 QEMU 验证约定 |
+| [docs/内核.md](docs/内核.md) | 微内核模块、对象模型、IPC、RK3588 约束 |
+| [docs/移植.md](docs/移植.md) | 移植、构建前提、启动与内存布局占位 |
+| [docs/引导.md](docs/引导.md) | 启动信息块与引导阶段（骨架） |
+| [docs/系统调用ABI.md](docs/系统调用ABI.md) | 系统调用 ABI（骨架） |
+| [docs/平台.md](docs/平台.md) | 平台 Tier 列表 |
+| [docs/术语.md](docs/术语.md) | 术语表 |
+| [docs/接口.md](docs/接口.md) | 对外 API 索引（占位） |
+| [docs/代码风格.md](docs/代码风格.md) | Rust 代码风格 |
+| [docs/提交约定.md](docs/提交约定.md) | Git 提交与 PR 约定 |
+| [docs/待办.md](docs/待办.md) | 新功能与能力扩展（TODO 列表） |
+| [docs/PR与议题计划.md](docs/PR与议题计划.md) | 当前里程碑：PR 与 GitHub Issue 顺序（含链接） |
 | [CHANGELOG.md](CHANGELOG.md) | 变更记录 |
-| [docs/en/README.md](docs/en/README.md) | 英文文档索引（与 `docs/*.md` **同名**一一对照，见表中链接） |
+| [docs/en/README.md](docs/en/README.md) | 英文文档索引（与 `docs/` 中文正文成对，见索引表） |
 
 ---
 
@@ -52,7 +53,7 @@ cargo build -p hawthorn_qemu_minimal --features bare-metal --target aarch64-unkn
 
 **提交前检查（推荐）**：安装 [pre-commit](https://pre-commit.com/) 后在仓库根执行 `pre-commit install`，与 CI 相同的 **格式化检查**、**Clippy** 与 **工作区单元测试**（`cargo test --workspace`）会在 `git commit` 时运行。说明见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
-镜像烧录、链接脚本与 **QEMU 最小镜像**（[`scripts/run_qemu_minimal.sh`](scripts/run_qemu_minimal.sh)）见 [docs/PORTING.md](docs/PORTING.md)。
+镜像烧录、链接脚本与 **QEMU 最小镜像**（[`scripts/run_qemu_minimal.sh`](scripts/run_qemu_minimal.sh)）见 [docs/移植.md](docs/移植.md)。
 
 `hawthorn_kernel` 串口回归脚本：
 
@@ -63,7 +64,7 @@ cargo build -p hawthorn_qemu_minimal --features bare-metal --target aarch64-unkn
 
 ## 仓库规划（实现阶段）
 
-与 [架构文档 §8](docs/ARCHITECTURE.md) 一致，预期目录包括：
+与 [架构文档 §8](docs/架构.md) 一致，预期目录包括：
 
 - `kernel/` — 微内核（已建占位 crate）  
 - `servers/` — 用户态驱动与服务  
@@ -74,7 +75,7 @@ cargo build -p hawthorn_qemu_minimal --features bare-metal --target aarch64-unkn
 
 ## 参与贡献与安全
 
-请参阅 [CONTRIBUTING.md](CONTRIBUTING.md) 与 [SECURITY.md](SECURITY.md)；提交前请阅读 [代码风格](docs/CODE_STYLE.md) 与 [提交规范](docs/COMMIT_CONVENTIONS.md)。使用 **Cursor** 或其它编程 Agent 时：先读 **[AGENTS.md](AGENTS.md)**；Cursor 规则见 [`.cursor/rules/`](.cursor/rules/)。
+请参阅 [CONTRIBUTING.md](CONTRIBUTING.md) 与 [SECURITY.md](SECURITY.md)；提交前请阅读 [代码风格](docs/代码风格.md) 与 [提交规范](docs/提交约定.md)。使用 **Cursor** 或其它编程 Agent 时：先读 **[AGENTS.md](AGENTS.md)**；Cursor 规则见 [`.cursor/rules/`](.cursor/rules/)。
 
 ---
 

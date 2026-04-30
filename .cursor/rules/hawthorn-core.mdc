@@ -6,7 +6,7 @@ alwaysApply: true
 # Hawthorn 核心上下文
 
 - 项目：**山楂**，英文代号 **hawthorn**；微内核 OS；首发 **香橙派 5 / RK3588**。crate **`hawthorn_kernel`** 在 `kernel/`。
-- 与用户交流默认使用 **简体中文**；公共 Rust `///` 文档注释仍建议 **英文**（见 `docs/CODE_STYLE.md`）。
-- 变更架构、内核对象、syscall ABI、启动契约时，同步更新 `docs/` 中对应章节（见 `docs/ARCHITECTURE.md`「文档维护」）。
+- 与用户交流默认使用 **简体中文**；公共 Rust `///` 文档注释仍建议 **英文**（见 `docs/代码风格.md`）。
+- 变更架构、内核对象、syscall ABI、启动契约时，同步更新 `docs/` 中对应章节（见 `docs/架构.md`「文档维护」）。
 - 新源码文件标注：`SPDX-License-Identifier: MIT OR Apache-2.0`（与 `LICENSE-*` 一致）。
-- 提交信息与 PR 遵循 `docs/COMMIT_CONVENTIONS.md`：**第 1 行英文** Conventional、**第 2 行中文**对应且**不同行**（由 `commit-msg` 钩子强制）。不扩大无关重构范围。
+- 提交信息与 PR 遵循 `docs/提交约定.md`：**第 1 行英文** Conventional、**第 2 行中文**对应且**不同行**（由 `commit-msg` 钩子强制）。不扩大无关重构范围。

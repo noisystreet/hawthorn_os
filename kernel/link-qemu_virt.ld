@@ -1,4 +1,4 @@
-/* QEMU virt machine: RAM at 0x4000_0000 (see docs/PORTING.md).
+/* QEMU virt machine: RAM at 0x4000_0000 (see docs/移植.md).
  * Canonical copy for `hawthorn_kernel` and `hawthorn_qemu_minimal`. */
 ENTRY(_start)
 

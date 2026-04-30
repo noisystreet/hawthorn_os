@@ -1,6 +1,6 @@
 # Important bugfix notes (engineering log)
 
-> **[中文](../BUGFIX_NOTES.md)** — Chinese source of this document.
+> **[中文](../缺陷修复笔记.md)** — Chinese source of this document.
 
 This page records **landed fixes that affect behaviour or the syscall ABI**, for reviews, regressions, and later IPC/isolation work. Line references drift; treat the source tree as authoritative.
 

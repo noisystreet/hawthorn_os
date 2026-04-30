@@ -1,6 +1,6 @@
 # Syscall ABI (skeleton)
 
-> **[中文](../SYSCALL_ABI.md)** — Chinese source of this document.
+> **[中文](../系统调用ABI.md)** — Chinese source of this document.
 
 User services and the **Hawthorn (山楂) microkernel** interact through a **stable syscall surface**; implementation lives under `kernel/syscall/` and a future `syscall_abi` crate. This page tracks **pre-freeze** direction.
 

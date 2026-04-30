@@ -3,16 +3,16 @@
 感谢你对 **山楂（hawthorn）** 的兴趣。使用 AI / Agent 协作时请先阅读根目录 **[AGENTS.md](AGENTS.md)**。提交前请阅读：
 
 - **GitHub**：[Issue 模板](.github/ISSUE_TEMPLATE)、[Pull Request 模板](.github/pull_request_template.md)（新建 Issue/PR 时选用）
-- [代码风格](docs/CODE_STYLE.md)
-- [提交规范](docs/COMMIT_CONVENTIONS.md)
-- [架构说明](docs/ARCHITECTURE.md)、[微内核设计](docs/KERNEL.md)（涉及内核行为或 ABI 的变更）、[测试分层](docs/TESTING.md)（新增/调整测试或 QEMU 验证脚本时）
+- [代码风格](docs/代码风格.md)
+- [提交规范](docs/提交约定.md)
+- [架构说明](docs/架构.md)、[微内核设计](docs/内核.md)（涉及内核行为或 ABI 的变更）、[测试分层](docs/测试.md)（新增/调整测试或 QEMU 验证脚本时）
 
 ## Git pre-commit（推荐）
 
 本仓库使用 [pre-commit](https://pre-commit.com/)：
 
 - **`pre-commit` 阶段**（每次 `git commit` 前）：**`typos`**（拼写检查）、**`cargo fmt --check`**、**`cargo clippy --workspace --all-targets`**（`-D warnings`，并 **`-W clippy::cognitive_complexity`**，与根目录 `clippy.toml` 中阈值 **10** 一致，约束认知/控制流复杂度）、**`cargo test --workspace`**（与 CI 一致）。  
-- **`commit-msg` 阶段**：**`scripts/commit_msg_bilingual.py`** 要求提交说明前两条非注释行为 **英文 Conventional Commits 标题行** + **单独一行中文**（语义对应、不得与英文同行），详见 [提交规范](docs/COMMIT_CONVENTIONS.md) §1.0。
+- **`commit-msg` 阶段**：**`scripts/commit_msg_bilingual.py`** 要求提交说明前两条非注释行为 **英文 Conventional Commits 标题行** + **单独一行中文**（语义对应、不得与英文同行），详见 [提交规范](docs/提交约定.md) §1.0。
 
 ```bash
 pip install pre-commit          # 或: brew install pre-commit
@@ -28,7 +28,7 @@ pre-commit install              # 安装 pre-commit + commit-msg（见 .pre-comm
 pre-commit run --all-files
 ```
 
-若钩子失败：先 **`cargo fmt --all`** 再提交；按 Clippy 提示修复或审慎添加 `#[allow(...)]`（见 [代码风格](docs/CODE_STYLE.md)）。**拼写**误报可在 **`_typos.toml`** 中扩展词典（见 [typos 文档](https://github.com/crate-ci/typos)）。若 **commit-msg** 报错，请按 [提交规范](docs/COMMIT_CONVENTIONS.md) §1.0 使用**两行标题**（英文 + 中文各占一行），例如：  
+若钩子失败：先 **`cargo fmt --all`** 再提交；按 Clippy 提示修复或审慎添加 `#[allow(...)]`（见 [代码风格](docs/代码风格.md)）。**拼写**误报可在 **`_typos.toml`** 中扩展词典（见 [typos 文档](https://github.com/crate-ci/typos)）。若 **commit-msg** 报错，请按 [提交规范](docs/提交约定.md) §1.0 使用**两行标题**（英文 + 中文各占一行），例如：  
 `docs: fix typo in PORTING` 下一行写 **`修正 PORTING 文档笔误。`**
 
 ## 许可证

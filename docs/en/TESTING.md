@@ -1,6 +1,6 @@
 # Hawthorn / 山楂 — Testing strategy & layers
 
-> **[中文](../TESTING.md)** — Chinese source of this document.
+> **[中文](../测试.md)** — Chinese source of this document.
 
 This document defines **test layering** for the Hawthorn repo, how it maps to CI, and conventions for bare-metal / QEMU end-to-end checks. Kernel behavior and module boundaries: [KERNEL.md](./KERNEL.md), [ARCHITECTURE.md](./ARCHITECTURE.md).
 

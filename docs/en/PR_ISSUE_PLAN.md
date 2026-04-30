@@ -1,6 +1,6 @@
 # PR and issue plan (current milestone)
 
-> **[中文](../PR_ISSUE_PLAN.md)** — Chinese source of this document.
+> **[中文](../PR与议题计划.md)** — Chinese source of this document.
 
 This page pins **GitHub issues** and the recommended **PR order** so branches and PR bodies can use `Closes #…` / `Refs #…`. The capability backlog remains [TODO.md](./TODO.md).
 
@@ -29,7 +29,7 @@ This page pins **GitHub issues** and the recommended **PR order** so branches an
 
 1. **One PR per issue** when practical; split large work but each PR should still `Closes #n` or `Refs #n`.
 2. Use [.github/pull_request_template.md](../../.github/pull_request_template.md); under **Related issues** add e.g. `Closes #1`.
-3. **Commits:** `docs/COMMIT_CONVENTIONS.md` — English Conventional line 1, matching Chinese line 2.
+3. **Commits:** `docs/提交约定.md` — English Conventional line 1, matching Chinese line 2.
 4. **Labels:** kernel work uses `kernel` + `enhancement`; new issues should keep tags like **`[kernel]`**, `[IPC]` (same habit as [TODO.md](./TODO.md)).
 
 ---

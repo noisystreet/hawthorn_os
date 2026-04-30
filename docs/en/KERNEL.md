@@ -1,6 +1,6 @@
 # Hawthorn / 山楂 — Microkernel: modules and design
 
-> **[中文](../KERNEL.md)** — Chinese source of this document.
+> **[中文](../内核.md)** — Chinese source of this document.
 
 Internal module split, object model, interface boundaries, and real-time notes for the **Hawthorn (山楂) microkernel**. System layering: [ARCHITECTURE.md](./ARCHITECTURE.md). Assumes familiarity with “small kernel + user services”.
 

@@ -7,7 +7,7 @@
 //!
 //! **Contract:** `TRAP_FRAME_*` constants must stay in sync with
 //! `kernel/src/trap.rs` (`sub sp, sp, #272`, stores/loads at `[sp, #256]`
-//! and `[sp, #264]`). See `docs/TRAP.md` §3.
+//! and `[sp, #264]`). See `docs/陷入与异常.md` §3.
 
 use core::mem::{align_of, offset_of, size_of};
 
@@ -50,7 +50,7 @@ mod tests {
 
     /// Regression: `ELR_EL1` / `SPSR_EL1` must live in the frame so a task that
     /// blocked inside a syscall does not `eret` with another task's ELR after
-    /// a context switch. See `docs/TRAP.md` §3.4.
+    /// a context switch. See `docs/陷入与异常.md` §3.4.
     #[test]
     fn trap_frame_includes_elr_spsr_for_blocking_syscall_eret() {
         assert_trap_frame_size_and_align_matches_asm();

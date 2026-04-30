@@ -1,6 +1,6 @@
 # Hawthorn / 山楂 — Porting and runtime
 
-> **[中文](../PORTING.md)** — Chinese source of this document.
+> **[中文](../移植.md)** — Chinese source of this document.
 
 Bring-up assumptions, build entry points, and open items for **Hawthorn (山楂)** on **Orange Pi 5 / RK3588** (Tier 1). Read with [ARCHITECTURE.md](./ARCHITECTURE.md) and [KERNEL.md](./KERNEL.md).
 

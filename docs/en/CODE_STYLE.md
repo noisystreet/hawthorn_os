@@ -1,6 +1,6 @@
 # Hawthorn / 山楂 — Code style
 
-> **[中文](../CODE_STYLE.md)** — Chinese source of this document.
+> **[中文](../代码风格.md)** — Chinese source of this document.
 
 Rust style, static checks, and review focus for **Hawthorn (山楂)** — kernel, HAL, drivers, tooling. If this doc disagrees with **CI** / `rustfmt` / `clippy` config, **CI wins**; update this doc when config changes.
 

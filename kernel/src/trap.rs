@@ -10,7 +10,7 @@
 //! The [`TrapFrame`] type lives in [`crate::trap_frame`] so layout tests can
 //! run on the host without assembling AArch64 vectors.
 //!
-//! See `docs/TRAP.md` for the full design.
+//! See `docs/陷入与异常.md` for the full design.
 
 use core::arch::asm;
 use core::arch::global_asm;

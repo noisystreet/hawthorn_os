@@ -1,6 +1,6 @@
 # Public API index
 
-> **[中文](../API.md)** — Chinese source of this document.
+> **[中文](../接口.md)** — Chinese source of this document.
 
 **Hawthorn (山楂)** has not yet published a stable crate-level API. The following will be filled in as code lands.
 

@@ -1,6 +1,6 @@
 # EL0 User Mode Support — Bug List (Fixed)
 
-> **[中文](../EL0_BUGS.md)** — 中文版文档。
+> **[中文](../EL0缺陷.md)** — 中文版文档。
 
 This page preserves the EL0 bring-up defect history for traceability.
 
