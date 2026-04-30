@@ -66,16 +66,16 @@ if ((${#STDBUF[@]} > 0)); then
     -cpu cortex-a76 \
     -display none \
     -kernel "${BIN}" \
-    -chardev "socket,id=ser,host=127.0.0.1,port=${SERIAL_PORT},nodelay=on,server=off" \
-    -serial chardev:ser
+    -chardev "socket,id=sock,host=127.0.0.1,port=${SERIAL_PORT},nodelay=on,server=off" \
+    -serial chardev:sock
 else
   timeout 8 qemu-system-aarch64 \
     -machine virt,gic-version=3 \
     -cpu cortex-a76 \
     -display none \
     -kernel "${BIN}" \
-    -chardev "socket,id=ser,host=127.0.0.1,port=${SERIAL_PORT},nodelay=on,server=off" \
-    -serial chardev:ser
+    -chardev "socket,id=sock,host=127.0.0.1,port=${SERIAL_PORT},nodelay=on,server=off" \
+    -serial chardev:sock
 fi
 QEMU_RC=$?
 set -e

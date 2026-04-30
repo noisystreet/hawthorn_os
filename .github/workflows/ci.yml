@@ -15,6 +15,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: typos
+        uses: crate-ci/typos@v1.45.2
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -24,7 +27,7 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: clippy (workspace)
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets -- -D warnings -W clippy::cognitive_complexity
 
       - name: test (workspace)
         run: cargo test --workspace
@@ -36,7 +39,7 @@ jobs:
         run: cargo check -p hawthorn_kernel --target aarch64-unknown-none
 
       - name: clippy (hawthorn_kernel, aarch64 bare-metal)
-        run: cargo clippy -p hawthorn_kernel --features bare-metal --target aarch64-unknown-none -- -D warnings
+        run: cargo clippy -p hawthorn_kernel --features bare-metal --target aarch64-unknown-none -- -D warnings -W clippy::cognitive_complexity
 
       - name: build (hawthorn_kernel qemu virt)
         run: cargo build -p hawthorn_kernel --features bare-metal --target aarch64-unknown-none
@@ -53,7 +56,7 @@ jobs:
         run: bash scripts/verify_kernel_qemu_virt_el0_serial.sh
 
       - name: clippy (qemu minimal, aarch64 bare-metal)
-        run: cargo clippy -p hawthorn_qemu_minimal --features bare-metal --target aarch64-unknown-none -- -D warnings
+        run: cargo clippy -p hawthorn_qemu_minimal --features bare-metal --target aarch64-unknown-none -- -D warnings -W clippy::cognitive_complexity
 
       - name: build (qemu minimal bare-metal)
         run: cargo build -p hawthorn_qemu_minimal --features bare-metal --target aarch64-unknown-none

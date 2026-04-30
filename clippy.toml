@@ -1,0 +1,6 @@
+# Clippy workspace configuration (see https://doc.rust-lang.org/clippy/configuration.html)
+#
+# cognitive_complexity approximates “control-flow complexity” (historically related to
+# cyclomatic complexity in Clippy). Threshold 10 matches project policy; enable the
+# lint via `-W clippy::cognitive_complexity` in CI and pre-commit.
+cognitive-complexity-threshold = 10

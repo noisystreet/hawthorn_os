@@ -54,8 +54,9 @@ Planned (not necessarily present yet): `servers/`, `hal/`, `bsp/orangepi5-rk3588
 ## 4. Verify locally (match CI)
 
 ```bash
+typos                             # spell check; or: pre-commit run typos --all-files
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets -- -D warnings
+cargo clippy --workspace --all-targets -- -D warnings -W clippy::cognitive_complexity
 cargo test --workspace
 cargo check -p hawthorn_kernel
 cargo check -p hawthorn_kernel --target aarch64-unknown-none
@@ -63,7 +64,7 @@ cargo build -p hawthorn_kernel --features bare-metal --target aarch64-unknown-no
 cargo build -p hawthorn_qemu_minimal --features bare-metal --target aarch64-unknown-none
 ```
 
-Optional: `pre-commit install` then each `git commit` runs **fmt/clippy/test** (`pre-commit` stage) and validates the **commit message first line** (**`commit-msg`**, Conventional Commits — see `docs/COMMIT_CONVENTIONS.md`). Optional: `git config commit.template .gitmessage` (see `CONTRIBUTING.md`).
+Optional: `pre-commit install` then each `git commit` runs **typos** / **fmt** / **clippy** (with cognitive complexity lint) / **test** (`pre-commit` stage) and validates the **commit message first line** (**`commit-msg`**, Conventional Commits — see `docs/COMMIT_CONVENTIONS.md`). Optional: `git config commit.template .gitmessage` (see `CONTRIBUTING.md`).
 
 ---
 

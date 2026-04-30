@@ -459,6 +459,150 @@ pub fn init() {
     crate::println!("[mm] TTBR0 root {:#x}, 2MiB block mappings", table);
 }
 
+#[inline]
+fn load_pte(base: usize, index: usize) -> u64 {
+    unsafe { *((base + index * 8) as *const u64) }
+}
+
+fn pte_kind(entry: u64) -> &'static str {
+    if entry & PTE_TABLE == PTE_TABLE {
+        "Table"
+    } else if entry & PTE_VALID != 0 && (entry & PTE_TABLE) == PTE_BLOCK {
+        "Block"
+    } else {
+        "Unknown"
+    }
+}
+
+fn dump_nonempty_pte_line(prefix: &'static str, idx: usize, entry: u64, paddr: usize) {
+    if entry == 0 {
+        return;
+    }
+    let typ = pte_kind(entry);
+    crate::println!(
+        "[mm/dump] {}[{}] = {:#x} ({}, paddr={:#x})",
+        prefix,
+        idx,
+        entry,
+        typ,
+        paddr
+    );
+}
+
+fn dump_l2_device_sample(l2: usize) {
+    const INDICES: [usize; 5] = [0, 64, 65, 72, 73];
+    for &i in &INDICES {
+        let entry = load_pte(l2, i);
+        if entry == 0 {
+            continue;
+        }
+        let typ = pte_kind(entry);
+        let paddr: usize = if entry & PTE_TABLE != 0 {
+            entry_to_paddr(entry)
+        } else {
+            ((entry >> 21) << 21) as usize
+        };
+        crate::println!(
+            "[mm/dump]   L2[{}] = {:#x} ({}, paddr={:#x})",
+            i,
+            entry,
+            typ,
+            paddr
+        );
+    }
+}
+
+fn dump_l2_ram_prefix(l2: usize) {
+    for i in 0..4 {
+        let entry = load_pte(l2, i);
+        if entry == 0 {
+            continue;
+        }
+        let typ = pte_kind(entry);
+        let paddr = (entry >> 21) << 21;
+        crate::println!(
+            "[mm/dump]   L2[{}] = {:#x} ({}, paddr={:#x})",
+            i,
+            entry,
+            typ,
+            paddr
+        );
+    }
+}
+
+fn next_table_addr(entry: u64) -> Option<usize> {
+    if entry & PTE_VALID != 0 && entry & PTE_TABLE != 0 {
+        Some(entry_to_paddr(entry))
+    } else {
+        None
+    }
+}
+
+fn dump_address_translation(table: usize, addr: usize) {
+    let idx0 = index_at(addr, 0);
+    let idx1 = index_at(addr, 1);
+    let idx2 = index_at(addr, 2);
+    let idx3 = index_at(addr, 3);
+    crate::println!(
+        "[mm/dump] Address {:#x}: PGD[{}] L1[{}] L2[{}] L3[{}]",
+        addr,
+        idx0,
+        idx1,
+        idx2,
+        idx3
+    );
+
+    let pgd_entry = load_pte(table, idx0);
+    let Some(l1) = next_table_addr(pgd_entry) else {
+        crate::println!("[mm/dump]   PGD[{}] not a table: {:#x}", idx0, pgd_entry);
+        return;
+    };
+    let l1_entry = load_pte(l1, idx1);
+    let Some(l2) = next_table_addr(l1_entry) else {
+        crate::println!("[mm/dump]   L1[{}] not a table: {:#x}", idx1, l1_entry);
+        return;
+    };
+    let l2_entry = load_pte(l2, idx2);
+    let Some(l3) = next_table_addr(l2_entry) else {
+        crate::println!("[mm/dump]   L2[{}] not a table: {:#x}", idx2, l2_entry);
+        return;
+    };
+    let l3_entry = load_pte(l3, idx3);
+    crate::println!(
+        "[mm/dump]   L3[{}] = {:#x} (valid={}, page={})",
+        idx3,
+        l3_entry,
+        l3_entry & PTE_VALID != 0,
+        l3_entry & PTE_PAGE != 0
+    );
+}
+
+fn dump_hierarchy_under_pgd0(pgd0: u64) {
+    if pgd0 & PTE_TABLE == 0 {
+        return;
+    }
+    let l1 = entry_to_paddr(pgd0);
+    crate::println!("[mm/dump] L1 table at {:#x}:", l1);
+    for i in 0..4 {
+        let entry = load_pte(l1, i);
+        dump_nonempty_pte_line("  L1", i, entry, entry_to_paddr(entry));
+    }
+
+    let l1_0 = load_pte(l1, 0);
+    if l1_0 & PTE_TABLE != 0 {
+        let l2 = entry_to_paddr(l1_0);
+        crate::println!("[mm/dump] L2 table (devices) at {:#x}:", l2);
+        dump_l2_device_sample(l2);
+    }
+
+    let l1_1 = load_pte(l1, 1);
+    if l1_1 & PTE_TABLE != 0 {
+        let l2 = entry_to_paddr(l1_1);
+        crate::println!("[mm/dump] L2 table (RAM) at {:#x}:", l2);
+        dump_l2_ram_prefix(l2);
+    }
+}
+
 /// Dump page table structure for debugging (MMU must be OFF)
 pub fn dump_tables() {
     let table = unsafe { KERNEL_PAGE_TABLE };
@@ -469,156 +613,16 @@ pub fn dump_tables() {
 
     crate::println!("[mm/dump] Page table base: {:#x}", table);
 
-    // Dump PGD entries 0-3
     for i in 0..4 {
-        let entry = unsafe { *((table + i * 8) as *const u64) };
-        if entry != 0 {
-            let typ = if entry & PTE_TABLE == PTE_TABLE {
-                "Table"
-            } else if entry & PTE_VALID != 0 && (entry & PTE_TABLE) == PTE_BLOCK {
-                "Block"
-            } else {
-                "Unknown"
-            };
-            crate::println!(
-                "[mm/dump] PGD[{}] = {:#x} ({}, paddr={:#x})",
-                i,
-                entry,
-                typ,
-                entry_to_paddr(entry)
-            );
-        }
+        let entry = load_pte(table, i);
+        dump_nonempty_pte_line("PGD", i, entry, entry_to_paddr(entry));
     }
 
-    // If PGD[0] is a table, dump its L1 entries 0-3
-    let pgd0 = unsafe { *((table) as *const u64) };
-    if pgd0 & PTE_TABLE != 0 {
-        let l1 = entry_to_paddr(pgd0);
-        crate::println!("[mm/dump] L1 table at {:#x}:", l1);
-        for i in 0..4 {
-            let entry = unsafe { *((l1 + i * 8) as *const u64) };
-            if entry != 0 {
-                let typ = if entry & PTE_TABLE == PTE_TABLE {
-                    "Table"
-                } else if entry & PTE_VALID != 0 && (entry & PTE_TABLE) == PTE_BLOCK {
-                    "Block"
-                } else {
-                    "Unknown"
-                };
-                let paddr = entry_to_paddr(entry);
-                crate::println!(
-                    "[mm/dump]   L1[{}] = {:#x} ({}, paddr={:#x})",
-                    i,
-                    entry,
-                    typ,
-                    paddr
-                );
-            }
-        }
+    dump_hierarchy_under_pgd0(load_pte(table, 0));
 
-        // Dump L2[0] for devices (via L1[0]) - includes GIC
-        let l1_0 = unsafe { *(l1 as *const u64) };
-        if l1_0 & PTE_TABLE != 0 {
-            let l2 = entry_to_paddr(l1_0);
-            crate::println!("[mm/dump] L2 table (devices) at {:#x}:", l2);
-            // Show L2[64] which covers GIC region (0x0800_0000)
-            for i in [0, 64, 65, 72, 73] {
-                let entry = unsafe { *((l2 + i * 8) as *const u64) };
-                if entry != 0 {
-                    let typ = if entry & PTE_TABLE == PTE_TABLE {
-                        "Table"
-                    } else if entry & PTE_VALID != 0 && (entry & PTE_TABLE) == PTE_BLOCK {
-                        "Block"
-                    } else {
-                        "Unknown"
-                    };
-                    let paddr: usize = if entry & PTE_TABLE != 0 {
-                        entry_to_paddr(entry)
-                    } else {
-                        ((entry >> 21) << 21) as usize // For 2MiB block
-                    };
-                    crate::println!(
-                        "[mm/dump]   L2[{}] = {:#x} ({}, paddr={:#x})",
-                        i,
-                        entry,
-                        typ,
-                        paddr
-                    );
-                }
-            }
-        }
-
-        // Dump L2[0] for RAM (via L1[1])
-        let l1_1 = unsafe { *((l1 + 8) as *const u64) };
-        if l1_1 & PTE_TABLE != 0 {
-            let l2 = entry_to_paddr(l1_1);
-            crate::println!("[mm/dump] L2 table (RAM) at {:#x}:", l2);
-            for i in 0..4 {
-                let entry = unsafe { *((l2 + i * 8) as *const u64) };
-                if entry != 0 {
-                    let typ = if entry & PTE_TABLE == PTE_TABLE {
-                        "Table"
-                    } else if entry & PTE_VALID != 0 && (entry & PTE_TABLE) == PTE_BLOCK {
-                        "Block"
-                    } else {
-                        "Unknown"
-                    };
-                    let paddr = (entry >> 21) << 21; // For 2MiB block
-                    crate::println!(
-                        "[mm/dump]   L2[{}] = {:#x} ({}, paddr={:#x})",
-                        i,
-                        entry,
-                        typ,
-                        paddr
-                    );
-                }
-            }
-        }
-    }
-
-    // Verify specific addresses
     let test_addrs = [0x4000_0000usize, 0x4000_1000, 0x0900_0000, 0x080a_0000];
-    for addr in test_addrs {
-        let idx0 = index_at(addr, 0);
-        let idx1 = index_at(addr, 1);
-        let idx2 = index_at(addr, 2);
-        let idx3 = index_at(addr, 3);
-        crate::println!(
-            "[mm/dump] Address {:#x}: PGD[{}] L1[{}] L2[{}] L3[{}]",
-            addr,
-            idx0,
-            idx1,
-            idx2,
-            idx3
-        );
-
-        // Actually walk the page table
-        let pgd_entry = unsafe { *((table + idx0 * 8) as *const u64) };
-        if pgd_entry & PTE_VALID != 0 && pgd_entry & PTE_TABLE != 0 {
-            let l1 = entry_to_paddr(pgd_entry);
-            let l1_entry = unsafe { *((l1 + idx1 * 8) as *const u64) };
-            if l1_entry & PTE_VALID != 0 && l1_entry & PTE_TABLE != 0 {
-                let l2 = entry_to_paddr(l1_entry);
-                let l2_entry = unsafe { *((l2 + idx2 * 8) as *const u64) };
-                if l2_entry & PTE_VALID != 0 && l2_entry & PTE_TABLE != 0 {
-                    let l3 = entry_to_paddr(l2_entry);
-                    let l3_entry = unsafe { *((l3 + idx3 * 8) as *const u64) };
-                    crate::println!(
-                        "[mm/dump]   L3[{}] = {:#x} (valid={}, page={})",
-                        idx3,
-                        l3_entry,
-                        l3_entry & PTE_VALID != 0,
-                        l3_entry & PTE_PAGE != 0
-                    );
-                } else {
-                    crate::println!("[mm/dump]   L2[{}] not a table: {:#x}", idx2, l2_entry);
-                }
-            } else {
-                crate::println!("[mm/dump]   L1[{}] not a table: {:#x}", idx1, l1_entry);
-            }
-        } else {
-            crate::println!("[mm/dump]   PGD[{}] not a table: {:#x}", idx0, pgd_entry);
-        }
+    for &addr in &test_addrs {
+        dump_address_translation(table, addr);
     }
 }
 

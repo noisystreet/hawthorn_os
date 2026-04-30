@@ -1,0 +1,10 @@
+# Project dictionary for https://github.com/crate-ci/typos
+# ARM / AArch64 mnemonics and register-field names appear in docs and asm strings.
+
+[files]
+extend-exclude = ["target/", ".git/"]
+
+[default.extend-identifiers]
+AttrIndx = "AttrIndx" # MAIR attribute index field (ARM nomenclature)
+alle2is = "alle2is" # AArch64 TLBI instruction mnemonic fragment
+vmalle1is = "vmalle1is" # AArch64 TLBI instruction mnemonic fragment

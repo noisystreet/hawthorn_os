@@ -404,43 +404,45 @@ mod tests {
 
     #[test]
     fn call_blocks_and_recv_unblocks() {
-        with_table(|| {
-            let endpoint = create_with_owner(TaskId(1)).unwrap();
+        with_table(call_blocks_and_recv_unblocks_body);
+    }
 
-            let result = call_with_caller(endpoint as u64, 0x1234, TaskId(2));
-            match result {
-                CallResult::Blocked => {}
-                CallResult::Reply(v) => panic!("expected Blocked, got Reply({:#x})", v),
-            }
+    fn call_blocks_and_recv_unblocks_body() {
+        let endpoint = create_with_owner(TaskId(1)).unwrap();
+        assert_call_from_task2_blocks(endpoint);
+        assert_recv_from_owner_returns_packed_client_and_msg(endpoint);
+        assert_reply_from_owner_unblocks_task2(endpoint);
+    }
 
-            unsafe {
-                assert!(CALLER_BLOCKED[2]);
-                assert!(ENDPOINT_TABLE[endpoint as usize].has_pending_call);
-            }
+    fn assert_call_from_task2_blocks(endpoint: u16) {
+        assert!(matches!(
+            call_with_caller(endpoint as u64, 0x1234, TaskId(2)),
+            CallResult::Blocked
+        ));
+        unsafe {
+            assert!(CALLER_BLOCKED[2]);
+            assert!(ENDPOINT_TABLE[endpoint as usize].has_pending_call);
+        }
+    }
 
-            let result = recv_with_caller(endpoint as u64, TaskId(1));
-            match result {
-                RecvResult::Message(packed) => {
-                    assert_eq!(packed >> 32, 2);
-                    assert_eq!(packed & 0xFFFF_FFFF, 0x1234);
-                }
-                RecvResult::Blocked => panic!("expected Message, got Blocked"),
-            }
+    fn assert_recv_from_owner_returns_packed_client_and_msg(endpoint: u16) {
+        let packed = recv_with_caller(endpoint as u64, TaskId(1)).unwrap_message();
+        assert_eq!(packed >> 32, 2);
+        assert_eq!(packed & 0xFFFF_FFFF, 0x1234);
+        unsafe {
+            assert!(!ENDPOINT_TABLE[endpoint as usize].has_pending_call);
+        }
+    }
 
-            unsafe {
-                assert!(!ENDPOINT_TABLE[endpoint as usize].has_pending_call);
-            }
-
-            assert_eq!(
-                reply_with_caller(endpoint as u64, 2, 0x5678, TaskId(1)),
-                Ok(())
-            );
-
-            unsafe {
-                assert!(!CALLER_BLOCKED[2]);
-                assert_eq!(REPLY_VALUE[2], 0x5678);
-            }
-        });
+    fn assert_reply_from_owner_unblocks_task2(endpoint: u16) {
+        assert_eq!(
+            reply_with_caller(endpoint as u64, 2, 0x5678, TaskId(1)),
+            Ok(())
+        );
+        unsafe {
+            assert!(!CALLER_BLOCKED[2]);
+            assert_eq!(REPLY_VALUE[2], 0x5678);
+        }
     }
 
     #[test]

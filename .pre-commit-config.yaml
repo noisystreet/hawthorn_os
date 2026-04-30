@@ -1,11 +1,16 @@
 # https://pre-commit.com
-# pre-commit：fmt / clippy / test（与 CI 一致）
+# pre-commit：typos / fmt / clippy / test（与 CI 一致）
 # commit-msg：Conventional Commits 英文首行 + 单独一行中文（见 docs/COMMIT_CONVENTIONS.md）
 default_install_hook_types:
   - pre-commit
   - commit-msg
 
 repos:
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.45.2
+    hooks:
+      - id: typos
+
   - repo: local
     hooks:
       - id: commit-msg-bilingual
@@ -24,7 +29,7 @@ repos:
         stages: [pre-commit]
 
       - id: cargo-clippy
-        name: cargo clippy (-D warnings)
+        name: cargo clippy (-D warnings, cognitive complexity ≤10)
         entry: cargo
         args:
           - clippy
@@ -33,6 +38,8 @@ repos:
           - --
           - -D
           - warnings
+          - -W
+          - clippy::cognitive_complexity
         language: system
         pass_filenames: false
         stages: [pre-commit]

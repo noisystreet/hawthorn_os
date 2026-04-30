@@ -53,9 +53,17 @@ mod tests {
     /// a context switch. See `docs/TRAP.md` §3.4.
     #[test]
     fn trap_frame_includes_elr_spsr_for_blocking_syscall_eret() {
+        assert_trap_frame_size_and_align_matches_asm();
+        assert_trap_frame_field_offsets_match_vector_stub();
+    }
+
+    fn assert_trap_frame_size_and_align_matches_asm() {
         assert_eq!(size_of::<TrapFrame>(), 272);
         assert_eq!(TRAP_FRAME_SIZE, 272);
         assert_eq!(align_of::<TrapFrame>(), 8);
+    }
+
+    fn assert_trap_frame_field_offsets_match_vector_stub() {
         assert_eq!(offset_of!(TrapFrame, x), 0);
         assert_eq!(offset_of!(TrapFrame, sp_el0), 31 * 8);
         assert_eq!(offset_of!(TrapFrame, elr_el1), TRAP_FRAME_OFFSET_ELR_EL1);
