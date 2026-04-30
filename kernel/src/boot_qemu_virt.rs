@@ -5,6 +5,11 @@
 use core::arch::asm;
 use core::fmt;
 
+use hawthorn_syscall_abi::{
+    SYS_ABI_INFO, SYS_ENDPOINT_CALL, SYS_ENDPOINT_CREATE, SYS_ENDPOINT_DESTROY, SYS_ENDPOINT_RECV,
+    SYS_ENDPOINT_REPLY, SYS_GETPID, SYS_WRITE,
+};
+
 /// PL011 base on QEMU `virt` AArch64 (DT `pl011@9000000`).
 pub const PL011_BASE: usize = 0x900_0000;
 const PL011_DR: usize = PL011_BASE;
@@ -26,15 +31,14 @@ extern "C" {
 #[no_mangle]
 #[used]
 static USER_PROGRAM: [u8; 52] = [
-    // mov x8, #0          // SYS_write syscall number
+    // mov x8, #0          // SYS_WRITE
     0x80, 0x00, 0x80, 0xd2, // mov x0, #1          // fd = stdout
-    0x20, 0x00, 0x80, 0xd2,
-    // adr x1, msg         // pointer to embedded message (PC-relative)
+    0x20, 0x00, 0x80, 0xd2, // adr x1, msg         // user buffer (PC-relative)
     0xe1, 0x00, 0x00, 0x10, // mov x2, #16         // length
-    0x02, 0x02, 0x80, 0xd2, // svc #0              // syscall
-    0x01, 0x00, 0x00, 0xd4, // mov x8, #1          // SYS_exit
-    0x88, 0x00, 0x80, 0xd2, // mov x0, #0          // exit code 0
-    0x00, 0x00, 0x80, 0xd2, // svc #0              // syscall
+    0x02, 0x02, 0x80, 0xd2, // svc #0
+    0x01, 0x00, 0x00, 0xd4, // mov x8, #4          // SYS_EXIT
+    0x88, 0x00, 0x80, 0xd2, // mov x0, #0          // exit status
+    0x00, 0x00, 0x80, 0xd2, // svc #0
     0x01, 0x00, 0x00, 0xd4,
     // b .                 // loop forever (should not reach here)
     0x00, 0x00, 0x00, 0x14, // msg: .ascii "hello from EL0!\n"
@@ -207,27 +211,48 @@ pub extern "C" fn kernel_main() -> ! {
 
         let pid: u64;
         unsafe {
+            let nr = SYS_GETPID;
             asm!(
-                "mov x8, #3",
+                "mov x8, {nr}",
                 "svc #0",
-                "mov {}, x0",
-                out(reg) pid,
+                "mov {out}, x0",
+                nr = in(reg) nr,
+                out = out(reg) pid,
             );
         }
         crate::println!("[task D] SYS_getpid returned {}", pid);
+
+        let abi: u64;
+        unsafe {
+            let nr = SYS_ABI_INFO;
+            asm!(
+                "mov x8, {nr}",
+                "svc #0",
+                "mov {out}, x0",
+                nr = in(reg) nr,
+                out = out(reg) abi,
+            );
+        }
+        crate::println!(
+            "[task D] SYS_ABI_INFO returned {} (expect {})",
+            abi,
+            hawthorn_syscall_abi::ABI_VERSION
+        );
 
         let msg = b"hello from SVC write!\n";
         let len = msg.len() as u64;
         let ptr = msg.as_ptr() as u64;
         let ret: u64;
         unsafe {
+            let nr = SYS_WRITE;
             asm!(
-                "mov x8, #0",
+                "mov x8, {nr}",
                 "mov x0, #1",
                 "mov x1, {ptr}",
                 "mov x2, {len}",
                 "svc #0",
                 "mov {ret}, x0",
+                nr = in(reg) nr,
                 ptr = in(reg) ptr,
                 len = in(reg) len,
                 ret = out(reg) ret,
@@ -237,13 +262,15 @@ pub extern "C" fn kernel_main() -> ! {
 
         let bad_ret: u64;
         unsafe {
+            let nr = SYS_WRITE;
             asm!(
-                "mov x8, #0",
+                "mov x8, {nr}",
                 "mov x0, #1",
                 "mov x1, {ptr}",
                 "mov x2, #8",
                 "svc #0",
                 "mov {ret}, x0",
+                nr = in(reg) nr,
                 ptr = in(reg) 0xdead_beef_u64,
                 ret = out(reg) bad_ret,
             );
@@ -258,12 +285,14 @@ pub extern "C" fn kernel_main() -> ! {
 
         let call_ret: u64;
         unsafe {
+            let nr = SYS_ENDPOINT_CALL;
             asm!(
-                "mov x8, #8",
+                "mov x8, {nr}",
                 "mov x0, {id}",
                 "mov x1, #42",
                 "svc #0",
                 "mov {ret}, x0",
+                nr = in(reg) nr,
                 id = in(reg) endpoint_id,
                 ret = out(reg) call_ret,
             );
@@ -280,10 +309,12 @@ pub extern "C" fn kernel_main() -> ! {
 
         let endpoint_id: u64;
         unsafe {
+            let nr = SYS_ENDPOINT_CREATE;
             asm!(
-                "mov x8, #6",
+                "mov x8, {nr}",
                 "svc #0",
                 "mov {id}, x0",
+                nr = in(reg) nr,
                 id = out(reg) endpoint_id,
             );
         }
@@ -291,11 +322,13 @@ pub extern "C" fn kernel_main() -> ! {
 
         let packed: u64;
         unsafe {
+            let nr = SYS_ENDPOINT_RECV;
             asm!(
-                "mov x8, #9",
+                "mov x8, {nr}",
                 "mov x0, {id}",
                 "svc #0",
                 "mov {out}, x0",
+                nr = in(reg) nr,
                 id = in(reg) endpoint_id,
                 out = out(reg) packed,
             );
@@ -310,13 +343,15 @@ pub extern "C" fn kernel_main() -> ! {
 
         let reply_ret: u64;
         unsafe {
+            let nr = SYS_ENDPOINT_REPLY;
             asm!(
-                "mov x8, #10",
+                "mov x8, {nr}",
                 "mov x0, {id}",
                 "mov x1, {client}",
                 "mov x2, {reply}",
                 "svc #0",
                 "mov {ret}, x0",
+                nr = in(reg) nr,
                 id = in(reg) endpoint_id,
                 client = in(reg) client_id,
                 reply = in(reg) (request + 1),
@@ -327,11 +362,13 @@ pub extern "C" fn kernel_main() -> ! {
 
         let destroy_ret: u64;
         unsafe {
+            let nr = SYS_ENDPOINT_DESTROY;
             asm!(
-                "mov x8, #7",
+                "mov x8, {nr}",
                 "mov x0, {id}",
                 "svc #0",
                 "mov {ret}, x0",
+                nr = in(reg) nr,
                 id = in(reg) endpoint_id,
                 ret = out(reg) destroy_ret,
             );

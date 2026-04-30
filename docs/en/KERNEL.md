@@ -132,9 +132,13 @@ Suggested minimal object types (names may vary):
 
 ### 3.8 Syscalls (`syscall`)
 
-- **Stable ABI:** syscall numbers, reg convention, error enum; user stubs share headers or codegen with kernel path.  
+- **Stable ABI:** syscall numbers, reg convention, error enum; user stubs share the **`hawthorn_syscall_abi`** crate with the kernel dispatch path.  
 - **Validation:** user pointers checked with **capability + range**; avoid **TOCTOU** (copy-in or HW protection).  
 - **Debug:** optional trace points / slow-path logs (compile-time gated).
+
+**Current implementation (QEMU virt):** `trap` routes **EL1 and EL0** SVC (`ESR.EC == 0x15`) to `syscall::dispatch` (`x8` = number, `x0–x5` args, `x0` retval; errors use the **negative errno** convention documented in that crate). Numbers include **`SYS_WRITE`**, **`SYS_YIELD`**, **`SYS_GETPID`**, **`SYS_EXIT`**, **`SYS_SLEEP`**, endpoint MVP (create/destroy/call/recv/reply), and **`SYS_ABI_INFO`** (returns **`ABI_VERSION`** so EL0 can probe compatibility).
+
+**Simulated EL0 user tasks (MVP):** `task::create_user` builds a **per-task TTBR0 user page table** (cloned from the kernel map), copies the linker section **`.user_program`** into user VA (demo: code at **`0x1000`**, stack top **`0x8000`**), and the first schedule enters **AArch64 EL0t** via **`user_return`**. **`SYS_WRITE`** and peers validate **user buffers** against the current low-VA window (see `kernel/src/syscall.rs`); invalid pointers return **`EFAULT`**.
 
 ---
 

@@ -32,6 +32,8 @@ pub const SYS_ENDPOINT_DESTROY: u64 = 7;
 pub const SYS_ENDPOINT_CALL: u64 = 8;
 pub const SYS_ENDPOINT_RECV: u64 = 9;
 pub const SYS_ENDPOINT_REPLY: u64 = 10;
+/// Returns [`ABI_VERSION`] in `x0` (single return value; extra capability bits may be added later).
+pub const SYS_ABI_INFO: u64 = 11;
 
 pub const MAX_ERRNO: u64 = 4095;
 
@@ -115,6 +117,11 @@ pub const ABI_VERSION: u64 = 1;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn abi_info_syscall_number_reserved() {
+        assert_eq!(SYS_ABI_INFO, 11);
+    }
 
     #[test]
     fn errno_as_u64_encodes_negative_for_errors() {

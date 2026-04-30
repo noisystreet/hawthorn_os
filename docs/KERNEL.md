@@ -132,9 +132,13 @@ Bootloader / **TF-A** 移交的 **异常级（EL）**、入口 PC、设备树指
 
 ### 3.8 系统调用接口（`syscall`）
 
-- **ABI 稳定面**：系统调用号、参数寄存器约定、错误码枚举；**用户态存根** 与内核路径共享同一头文件或生成代码。
+- **ABI 稳定面**：系统调用号、参数寄存器约定、错误码枚举；**用户态存根** 与内核路径共享同一头文件或生成代码（仓库为 **`hawthorn_syscall_abi`** crate）。
 - **校验**：所有用户指针经 **能力+范围** 校验后再访问；避免 **TOCTOU**（可先拷贝到小内核缓冲或配合硬件保护）。
 - **调试**：可选 **跟踪点** 与 **慢路径日志**（编译期开关）。
+
+**当前实现（QEMU virt）**：`trap` 对 **EL1 与 EL0** 的 SVC（`ESR.EC == 0x15`）均调用 `syscall::dispatch`（`x8` = 调用号，`x0`–`x5` 为参数，`x0` 返回；错误为 **负 errno** 风格，见该 crate 文档）。已实现调用号包括 **`SYS_WRITE`**、**`SYS_YIELD`**、**`SYS_GETPID`**、**`SYS_EXIT`**、**`SYS_SLEEP`**、端点 MVP（create/destroy/call/recv/reply）及 **`SYS_ABI_INFO`**（返回 **`ABI_VERSION`**，便于用户程序在启动时探测兼容边界）。
+
+**模拟 EL0 用户态（MVP）**：`task::create_user` 为任务分配 **独立 TTBR0 用户页表**（自内核页表克隆），将链接段 **`.user_program`** 拷贝映射到用户虚址（演示为代码 **`0x1000`**、用户栈顶 **`0x8000`**）；首次调度经 **`user_return`** 以 **AArch64 EL0t** 执行内嵌字节程序。`SYS_WRITE` 等对 **用户缓冲** 仅允许落在当前策略规定的用户 VA 窗内（见 `kernel/src/syscall.rs`），否则返回 **`EFAULT`**。
 
 ---
 

@@ -12,8 +12,8 @@
 //! - x0  = return value (negative = Errno)
 
 use hawthorn_syscall_abi::{
-    Errno, SYS_ENDPOINT_CALL, SYS_ENDPOINT_CREATE, SYS_ENDPOINT_DESTROY, SYS_ENDPOINT_RECV,
-    SYS_ENDPOINT_REPLY, SYS_EXIT, SYS_GETPID, SYS_SLEEP, SYS_WRITE, SYS_YIELD,
+    Errno, SYS_ABI_INFO, SYS_ENDPOINT_CALL, SYS_ENDPOINT_CREATE, SYS_ENDPOINT_DESTROY,
+    SYS_ENDPOINT_RECV, SYS_ENDPOINT_REPLY, SYS_EXIT, SYS_GETPID, SYS_SLEEP, SYS_WRITE, SYS_YIELD,
 };
 
 const MAX_SYSCALL: u64 = 64;
@@ -42,6 +42,7 @@ pub fn init() {
         SYSCALL_TABLE[SYS_ENDPOINT_CALL as usize] = Some(sys_endpoint_call);
         SYSCALL_TABLE[SYS_ENDPOINT_RECV as usize] = Some(sys_endpoint_recv);
         SYSCALL_TABLE[SYS_ENDPOINT_REPLY as usize] = Some(sys_endpoint_reply);
+        SYSCALL_TABLE[SYS_ABI_INFO as usize] = Some(sys_abi_info);
     }
 }
 
@@ -135,6 +136,10 @@ fn user_range_valid(start: usize, len: usize) -> bool {
         return false;
     };
     start >= USER_VA_MIN && end <= USER_VA_MAX_EXCL && start < end
+}
+
+fn sys_abi_info(_a0: u64, _a1: u64, _a2: u64, _a3: u64, _a4: u64, _a5: u64) -> u64 {
+    hawthorn_syscall_abi::ABI_VERSION
 }
 
 fn sys_yield(_a0: u64, _a1: u64, _a2: u64, _a3: u64, _a4: u64, _a5: u64) -> u64 {
